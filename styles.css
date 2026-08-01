@@ -479,15 +479,15 @@ html.agent24-dialog-open {
   margin: 12px auto 0;
   padding: 7px 8px 7px 18px;
   z-index: 1;
-  border: 1px solid rgba(168, 180, 217, 0.72);
+  border: 1px solid rgba(198, 207, 235, 0.98);
   border-radius: 17px;
   background: #fff;
   box-shadow:
-    0 -11px 34px rgba(168, 180, 217, 0.52),
-    -24px 5px 46px rgba(190, 213, 232, 0.38),
-    28px 7px 48px rgba(172, 158, 216, 0.36),
-    0 28px 70px rgba(168, 180, 217, 0.2),
-    0 0 0 1px rgba(168, 180, 217, 0.42),
+    0 -8px 22px rgba(168, 180, 217, 0.28),
+    -16px 2px 28px rgba(181, 215, 235, 0.22),
+    18px 4px 30px rgba(184, 168, 220, 0.2),
+    0 16px 34px rgba(168, 180, 217, 0.12),
+    0 0 0 1px rgba(168, 180, 217, 0.34),
     inset 0 1px 0 #fff;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -498,31 +498,29 @@ html.agent24-dialog-open {
 #agent24-purchase-guard .agent24-prompt::before {
   position: absolute;
   z-index: -1;
-  inset: -210px -240px -145px;
-  border-radius: 0;
+  inset: -82px -76px -92px;
+  border-radius: 46%;
   background:
     radial-gradient(
-      ellipse 48% 43% at 44% 49%,
-      rgba(168, 180, 217, 0.86) 0%,
-      rgba(176, 187, 220, 0.48) 39%,
-      rgba(168, 180, 217, 0.13) 70%,
-      transparent 100%
+      ellipse 50% 52% at 45% 48%,
+      rgba(168, 180, 217, 0.72) 0%,
+      rgba(176, 187, 220, 0.38) 32%,
+      rgba(168, 180, 217, 0.1) 56%,
+      transparent 75%
     ),
     radial-gradient(
-      ellipse 37% 43% at 12% 53%,
-      rgba(180, 215, 236, 0.64) 0%,
-      rgba(185, 204, 230, 0.32) 48%,
-      rgba(183, 198, 226, 0.09) 73%,
-      transparent 100%
+      ellipse 34% 48% at 9% 55%,
+      rgba(174, 214, 236, 0.52) 0%,
+      rgba(185, 204, 230, 0.2) 38%,
+      transparent 68%
     ),
     radial-gradient(
-      ellipse 40% 39% at 91% 44%,
-      rgba(186, 164, 226, 0.62) 0%,
-      rgba(179, 171, 216, 0.3) 49%,
-      rgba(168, 180, 217, 0.08) 74%,
-      transparent 100%
+      ellipse 36% 46% at 94% 43%,
+      rgba(188, 169, 224, 0.48) 0%,
+      rgba(179, 171, 216, 0.18) 40%,
+      transparent 70%
     );
-  filter: blur(27px);
+  filter: blur(21px);
   content: "";
   pointer-events: none;
 }
@@ -541,13 +539,13 @@ html.agent24-dialog-open {
 }
 #agent24-purchase-guard .agent24-prompt:focus-within {
   background: #fff;
-  border-color: rgba(168, 180, 217, 0.9);
+  border-color: rgba(184, 195, 230, 1);
   box-shadow:
-    0 -12px 36px rgba(168, 180, 217, 0.58),
-    -24px 5px 46px rgba(180, 215, 236, 0.42),
-    28px 7px 48px rgba(186, 164, 226, 0.4),
-    0 28px 72px rgba(168, 180, 217, 0.23),
-    0 0 0 1px rgba(168, 180, 217, 0.54),
+    0 -9px 24px rgba(168, 180, 217, 0.34),
+    -17px 2px 30px rgba(174, 214, 236, 0.27),
+    19px 4px 32px rgba(188, 169, 224, 0.25),
+    0 17px 36px rgba(168, 180, 217, 0.15),
+    0 0 0 1px rgba(168, 180, 217, 0.5),
     inset 0 1px 0 #fff;
 }
 #agent24-purchase-guard .agent24-prompt textarea,
@@ -706,6 +704,92 @@ html.agent24-dialog-open {
   margin: 28px 0 0;
   color: rgba(68, 93, 104, 0.5);
   font-size: 12px;
+}
+
+#agent24-purchase-guard .agent24-batch-interview,
+#agent24-purchase-guard .agent24-batch-feedback {
+  width: min(560px, 100%);
+  margin: 0 auto;
+  text-align: center;
+}
+#agent24-purchase-guard .agent24-batch-interview > h1,
+#agent24-purchase-guard .agent24-batch-feedback > h1 {
+  margin: 0;
+  color: #31434c;
+  font-size: 30px;
+  font-weight: 570;
+  letter-spacing: -0.04em;
+}
+#agent24-purchase-guard .agent24-batch-question-list,
+#agent24-purchase-guard .agent24-batch-feedback-list {
+  display: grid;
+  gap: 14px;
+  margin-top: 24px;
+  text-align: left;
+}
+#agent24-purchase-guard .agent24-batch-question,
+#agent24-purchase-guard .agent24-batch-feedback-card {
+  padding: 18px;
+  border: 1px solid rgba(91, 119, 132, 0.14);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.54);
+}
+#agent24-purchase-guard .agent24-batch-product {
+  margin: 0 0 7px;
+  color: rgba(62, 83, 93, 0.48);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#agent24-purchase-guard .agent24-batch-question h2 {
+  margin: 0;
+  color: #3e5964;
+  font-size: 16px;
+  font-weight: 600;
+}
+#agent24-purchase-guard .agent24-batch-question .agent24-options {
+  width: 100%;
+  margin-top: 10px;
+}
+#agent24-purchase-guard .agent24-batch-question .agent24-option {
+  min-height: 42px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  font-size: 12px;
+}
+#agent24-purchase-guard .agent24-batch-question textarea {
+  width: 100%;
+  margin-top: 12px;
+  padding: 11px 13px;
+  color: #31434c;
+  border: 1px solid rgba(91, 119, 132, 0.18);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+  font: inherit;
+  font-size: 12px;
+  resize: vertical;
+}
+#agent24-purchase-guard .agent24-batch-feedback-card > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+#agent24-purchase-guard .agent24-batch-feedback-card strong {
+  color: #31434c;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+#agent24-purchase-guard .agent24-batch-feedback-card p {
+  margin: 10px 0 0;
+  font-size: 12px;
+}
+#agent24-purchase-guard .agent24-batch-feedback-card ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: rgba(52, 71, 80, 0.65);
+  font-size: 11px;
+  line-height: 1.6;
 }
 
 #agent24-purchase-guard .agent24-analysis-wrap {
