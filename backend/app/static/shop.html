@@ -302,7 +302,7 @@ function startLive(title) {
       if (prev && !prev.dataset.done) { prev.dataset.done = '1'; prev.innerHTML += ' <span class="muted">✓</span>'; }
       return;
     } else if (e.channel === 'system' && e.raw && e.raw.step === 'verdict') {
-      line = `<b>규칙 엔진 판정</b> <span class="muted">${e.raw.verdict} · 점수 ${e.raw.risk_score}</span>`;
+      line = `<b>규칙 엔진 판정</b> <span class="muted">${e.raw.verdict}</span>`;
     }
     if (line) { const li = document.createElement('li'); li.innerHTML = line; ul.appendChild(li); }
   };
@@ -351,16 +351,19 @@ function savingsBox(s) {
 }
 
 function renderVerdict(res) {
-  const bd = (res.breakdown||[]).map(b => `<li>${b.label} <b>${b.points > 0 ? '+' : ''}${b.points}</b></li>`).join('');
+  // 판정 근거는 항목 이름만. 점수는 표기하지 않고, 다크패턴 항목은 화면에서 제외한다.
+  const bd = (res.breakdown||[])
+    .filter(b => b.key !== 'dark_pattern_detected')
+    .map(b => `<li>${b.label}</li>`).join('');
   const claims = (res.claims||[]).map(c => `<li>[${c.type}] ${c.text} → <b>${c.status}</b>${c.evidence ? ` <span class="muted">${c.evidence}</span>` : ''}</li>`).join('');
   const holdTxt = res.hold_minutes ? `${res.hold_minutes >= 60 ? (res.hold_minutes/60)+'시간' : res.hold_minutes+'분'} 보류` : '';
   openModal(`
     <div class="kicker">ULYSSES · 규칙 엔진 판정</div>
-    <div class="verdict v-${res.verdict}">${res.verdict}${holdTxt ? ' · ' + holdTxt : ''} <span style="float:right">위험 점수 ${res.risk_score}</span></div>
+    <div class="verdict v-${res.verdict}">${res.verdict}${holdTxt ? ' · ' + holdTxt : ''}</div>
     <p>${res.summary || ''}</p>
     ${res.capped_reason ? `<p class="muted">${res.capped_reason}</p>` : ''}
     ${claims ? `<p class="muted">주장 분해</p><ul class="bd">${claims}</ul>` : ''}
-    <p class="muted">점수 근거 (LLM이 아니라 규칙표로 계산)</p>
+    <p class="muted">판정 근거 (LLM이 아니라 규칙으로 계산)</p>
     <ul class="bd">${bd || '<li>해당 항목 없음</li>'}</ul>
     ${savingsBox(res.savings)}
     ${res.alternative && res.alternative.summary ? `<p class="muted">대안</p><p>${res.alternative.summary}</p>` : ''}

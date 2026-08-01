@@ -607,8 +607,11 @@
     const verdict = result.verdict || "PASS";
     const savings = result.savings || {};
 
+    // 판정 근거는 항목 이름만 보여준다. 점수는 표기하지 않는다.
+    // 다크패턴 항목은 화면에서 제외한다(탐지·채점은 백엔드에서 계속 이루어진다).
     const breakdownHtml = (result.breakdown || [])
-      .map((b) => `<p class="agent24-score-item">· ${escapeAttr(b.label)} <b>+${b.points}</b></p>`)
+      .filter((b) => b.key !== "dark_pattern_detected")
+      .map((b) => `<p class="agent24-score-item">· ${escapeAttr(b.label)}</p>`)
       .join("");
 
     const claimsHtml = (result.claims || [])
@@ -626,11 +629,11 @@
 
     dialogElements.screen.innerHTML = `
       <p class="agent24-label">AGENT24 · 규칙 엔진 판정</p>
-      <p class="agent24-verdict-badge agent24-verdict-${verdict}">${VERDICT_LABELS[verdict] || verdict} · 위험 점수 ${result.risk_score ?? 0}</p>
+      <p class="agent24-verdict-badge agent24-verdict-${verdict}">${VERDICT_LABELS[verdict] || verdict}</p>
       <p>${escapeAttr(result.summary || "")}</p>
       ${result.capped_reason ? `<p class="agent24-hint">${escapeAttr(result.capped_reason)}</p>` : ""}
       ${claimsHtml ? `<div class="agent24-claims"><p class="agent24-section-title">주장 분해</p>${claimsHtml}</div>` : ""}
-      ${breakdownHtml ? `<div class="agent24-breakdown"><p class="agent24-section-title">점수 근거</p>${breakdownHtml}</div>` : ""}
+      ${breakdownHtml ? `<div class="agent24-breakdown"><p class="agent24-section-title">판정 근거</p>${breakdownHtml}</div>` : ""}
       <p class="agent24-savings">
         안 사면 ₩${(savings.not_buying_saves ?? 0).toLocaleString()} 절약
         ${savings.cheaper_saves ? ` · 더 싼 곳으로 바꾸면 ₩${savings.cheaper_saves.toLocaleString()} 절약` : ""}
