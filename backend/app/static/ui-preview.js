@@ -16,14 +16,14 @@
 
   function contextScreen(kind) {
     const state = {
-      remaining: { amount: "103,100", message: "이 구매 후에는 이만큼만 남아요" },
+      remaining: { amount: "1,353,100", message: "이 구매 후에는 이만큼만 남아요" },
       zero: { amount: "0", message: "이 구매로 이번 달 여유금액을 모두 써요" },
       shortage: { amount: "131,360", message: "이 구매에는 이만큼 더 필요해요" },
     }[kind];
     return `
       <div class="agent24-context">
         <section class="agent24-balance">
-          <p class="agent24-concept-label">이번 달 여유금액: 250,000원</p>
+          <p class="agent24-concept-label">이번 달 여유금액: 1,500,000원</p>
           <h1 id="agent24-title"><span class="agent24-amount-number">${state.amount}</span><span class="agent24-amount-unit">원</span></h1>
           <p class="agent24-concept-result"><strong>${state.message}</strong></p>
         </section>
