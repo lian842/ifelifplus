@@ -3,7 +3,7 @@
 
   const ROOT_ID = "agent24-purchase-guard";
   const BACKEND_URL = "http://localhost:8787";
-  const { findSite, matchesPaymentText } = globalThis.Agent24Sites;
+  const { findSite, matchesPath, matchesPaymentText } = globalThis.Agent24Sites;
   const currentSite = findSite(location.hostname);
 
   if (!currentSite) {
@@ -31,7 +31,7 @@
   let dialogElements = null;
   let resumeAction = null;
   let previouslyFocused = null;
-  let wizard = null; // { caseId }
+  let wizard = null; // { caseId, items, currentIndex, decisions }
 
   function getControlText(control) {
     return [
@@ -148,6 +148,61 @@
 
   const BYPASS_KEY = "agent24_bypass_until";
   const BYPASS_WINDOW_MS = 5 * 60 * 1000;
+  const CART_ITEMS_KEY = "agent24_coupang_cart_items";
+  const CART_ITEMS_TTL_MS = 10 * 60 * 1000;
+
+  function isCartPage() {
+    return Boolean(
+      currentSite.cartPaths &&
+        matchesPath(currentSite.cartPaths, location.href, location.href),
+    );
+  }
+
+  function isCartCheckoutControl(control) {
+    return Boolean(
+      isCartPage() &&
+        currentSite.cartCheckoutSelector &&
+        control?.matches(currentSite.cartCheckoutSelector),
+    );
+  }
+
+  async function saveCartItems(control) {
+    const items = currentSite.scrapeCartItems?.() || [];
+    if (!items.length) {
+      await chrome.storage.local.remove(CART_ITEMS_KEY);
+      return;
+    }
+    const countMatch = getControlText(control).match(/총\s*(\d+)\s*개\s*상품/);
+    const itemCount = countMatch ? Number(countMatch[1]) : null;
+    await chrome.storage.local.set({
+      [CART_ITEMS_KEY]: { savedAt: Date.now(), itemCount, items },
+    });
+  }
+
+  async function loadCartItems() {
+    if (currentSite.id !== "coupang" || isCartPage()) {
+      return { items: [], itemCount: null };
+    }
+    try {
+      const stored = (await chrome.storage.local.get(CART_ITEMS_KEY))[CART_ITEMS_KEY];
+      if (
+        !stored ||
+        Date.now() - Number(stored.savedAt) > CART_ITEMS_TTL_MS ||
+        !Array.isArray(stored.items)
+      ) {
+        await chrome.storage.local.remove(CART_ITEMS_KEY);
+        return { items: [], itemCount: null };
+      }
+      return {
+        items: stored.items.filter(
+          (item) => item?.name && Number(item.price) > 0 && Number(item.quantity) > 0,
+        ),
+        itemCount: Number(stored.itemCount) > 0 ? Number(stored.itemCount) : null,
+      };
+    } catch {
+      return { items: [], itemCount: null };
+    }
+  }
 
   function armBypass() {
     try {
@@ -168,6 +223,7 @@
 
   function proceedWithOriginal() {
     armBypass();
+    chrome.storage.local.remove(CART_ITEMS_KEY).catch(() => {});
     resumeAction?.();
     closeDialog();
   }
@@ -244,7 +300,29 @@
   }
 
   function escapeAttr(str) {
-    return String(str ?? "").replace(/"/g, "&quot;");
+    return String(str ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function caseProgressHtml() {
+    if (!wizard || wizard.items.length <= 1) return "";
+    const item = wizard.items[wizard.currentIndex];
+    return `
+      <p class="agent24-hint">
+        상품 ${wizard.currentIndex + 1}/${wizard.items.length} · ${escapeAttr(item.name)}
+        ${item.quantity > 1 ? ` · ${item.quantity}개` : ""}
+      </p>
+    `;
+  }
+
+  function nextActionLabel(finalLabel) {
+    return wizard && wizard.currentIndex < wizard.items.length - 1
+      ? "다음 상품 판단"
+      : finalLabel;
   }
 
   // ---- /api/observe — fired once at page load, independent of the checkout click -------------------------------------------------
@@ -252,6 +330,9 @@
   // Fire-and-forget; failures are ignored.
 
   function fireObserveOnce() {
+    if (isCartPage()) {
+      return;
+    }
     let attempts = 0;
     const tryObserve = () => {
       attempts += 1;
@@ -319,24 +400,55 @@
 
   // ---- Screen 0: confirm scraped (or manually entered) product info -------------------------------------------------
 
-  function renderProductConfirmScreen() {
+  async function renderProductConfirmScreen() {
     let scraped = { name: null, price: null };
+    let cartNotice = "";
+    const { items: cartItems, itemCount } = await loadCartItems();
+    if (cartItems.length) {
+      const totalQuantity =
+        itemCount ??
+        cartItems.reduce((sum, item) => sum + Number(item.quantity || 1), 0);
+      cartNotice = `장바구니의 총 ${totalQuantity}개 상품을 하나씩 모두 판단합니다.`;
+    }
     try {
-      scraped = currentSite.scrapeProduct?.() || scraped;
+      if (!cartItems.length) {
+        scraped = currentSite.scrapeProduct?.() || scraped;
+      }
     } catch {
       // scraping is best-effort; fall through to blank/manual fields
     }
 
+    const fieldsHtml = cartItems.length
+      ? cartItems
+          .map(
+            (item, index) => `
+              <div class="agent24-cart-item">
+                <label class="agent24-field">상품 ${index + 1}
+                  <input type="text" data-agent24-cart-name value="${escapeAttr(item.name)}" />
+                </label>
+                <label class="agent24-field">개당 가격(원)
+                  <input type="number" data-agent24-cart-price value="${Number(item.price)}" />
+                </label>
+                <input type="hidden" data-agent24-cart-quantity value="${Number(item.quantity) || 1}" />
+              </div>
+            `,
+          )
+          .join("")
+      : `
+        <label class="agent24-field">상품명
+          <input type="text" id="agent24-product-name" value="${scraped.name ? escapeAttr(scraped.name) : ""}" />
+        </label>
+        <label class="agent24-field">가격(원)
+          <input type="number" id="agent24-product-price" value="${scraped.price ?? ""}" />
+        </label>
+      `;
+
     dialogElements.screen.innerHTML = `
       <p class="agent24-label">AGENT24 · ${currentSite.name}</p>
-      <h2 id="agent24-title">결제하려는 상품이 맞나요?</h2>
+      <h2 id="agent24-title">결제하려는 상품${cartItems.length > 1 ? "들이" : "이"} 맞나요?</h2>
+      ${cartNotice ? `<p class="agent24-hint">${escapeAttr(cartNotice)}</p>` : ""}
       <p class="agent24-hint">자동으로 읽어온 값이에요. 다르면 직접 고쳐주세요.</p>
-      <label class="agent24-field">상품명
-        <input type="text" id="agent24-product-name" value="${scraped.name ? escapeAttr(scraped.name) : ""}" />
-      </label>
-      <label class="agent24-field">가격(원)
-        <input type="number" id="agent24-product-price" value="${scraped.price ?? ""}" />
-      </label>
+      ${fieldsHtml}
       <div class="agent24-actions">
         <button type="button" class="agent24-button agent24-button-secondary" id="agent24-product-cancel">취소</button>
         <button type="button" class="agent24-button agent24-button-primary" id="agent24-product-continue">확인</button>
@@ -345,21 +457,42 @@
 
     document.getElementById("agent24-product-cancel").onclick = () => closeDialog();
     document.getElementById("agent24-product-continue").onclick = async () => {
-      const name = document.getElementById("agent24-product-name").value.trim();
-      const price = Number(document.getElementById("agent24-product-price").value);
-      if (!name || !price || price <= 0) return;
-      await startCase(name, price);
+      const items = cartItems.length
+        ? Array.from(dialogElements.screen.querySelectorAll(".agent24-cart-item")).map(
+            (row) => ({
+              name: row.querySelector("[data-agent24-cart-name]").value.trim(),
+              price: Number(row.querySelector("[data-agent24-cart-price]").value),
+              quantity: Number(row.querySelector("[data-agent24-cart-quantity]").value) || 1,
+            }),
+          )
+        : [
+            {
+              name: document.getElementById("agent24-product-name").value.trim(),
+              price: Number(document.getElementById("agent24-product-price").value),
+              quantity: 1,
+            },
+          ];
+      if (items.some((item) => !item.name || !item.price || item.price <= 0)) return;
+      await beginCaseQueue(items);
     };
     focusFirst();
   }
 
   // ---- /api/case — the checkout-click trigger, branches 3 ways -------------------------------------------------
 
-  async function startCase(name, price) {
+  async function beginCaseQueue(items) {
+    wizard = { caseId: null, items, currentIndex: 0, decisions: [] };
+    await startCurrentCase();
+  }
+
+  async function startCurrentCase() {
+    const item = wizard.items[wizard.currentIndex];
+    const name = item.name;
+    const price = Number(item.price) * Number(item.quantity || 1);
     dialogElements.screen.innerHTML = `<p>확인하는 중입니다...</p>`;
     const laterLabelTimer = setTimeout(() => {
       if (dialogElements?.screen) {
-        dialogElements.screen.innerHTML = `<p>최저가를 찾는 중입니다...</p>`;
+        dialogElements.screen.innerHTML = `<p>상품 분석 중입니다.</p>`;
       }
     }, 1500);
 
@@ -384,7 +517,7 @@
     }
     clearTimeout(laterLabelTimer);
 
-    wizard = { caseId: result.case_id };
+    wizard.caseId = result.case_id;
 
     if (result.parse_failed) {
       renderParseFailedScreen(result);
@@ -399,12 +532,14 @@
     dialogElements.screen.innerHTML = `
       <p class="agent24-label">AGENT24 · ${currentSite.name}</p>
       <h2 id="agent24-title">상품 정보를 확인하지 못했어요</h2>
+      ${caseProgressHtml()}
       <p>${escapeAttr(result.message || "판단할 근거가 없어 결제를 막지 않습니다.")}</p>
       <div class="agent24-actions">
-        <button type="button" class="agent24-button agent24-button-primary" id="agent24-parsefail-continue">계속</button>
+        <button type="button" class="agent24-button agent24-button-primary" id="agent24-parsefail-continue">${nextActionLabel("계속")}</button>
       </div>
     `;
-    document.getElementById("agent24-parsefail-continue").onclick = () => proceedWithOriginal();
+    document.getElementById("agent24-parsefail-continue").onclick = () =>
+      completeCurrentCase("accept", false, "PASS");
     focusFirst();
   }
 
@@ -442,6 +577,7 @@
     dialogElements.screen.innerHTML = `
       <p class="agent24-label">AGENT24 · 심문 없음 · 마찰 없음</p>
       <h2 id="agent24-title">가격만 확인했습니다</h2>
+      ${caseProgressHtml()}
       <p>${escapeAttr(result.mode_reason || "")}</p>
       ${renderBudgetBlock(result.budget)}
       ${priceHtml}
@@ -449,14 +585,13 @@
       ${result.agent_error ? `<p class="agent24-hint">일부 조사에 실패했지만 확인된 정보만으로 안내합니다.</p>` : ""}
       <div class="agent24-actions">
         <button type="button" class="agent24-button agent24-button-secondary" id="agent24-priceonly-cancel">취소</button>
-        <button type="button" class="agent24-button agent24-button-primary" id="agent24-priceonly-buy">결제하기</button>
+        <button type="button" class="agent24-button agent24-button-primary" id="agent24-priceonly-buy">${nextActionLabel("결제하기")}</button>
       </div>
     `;
 
     document.getElementById("agent24-priceonly-cancel").onclick = () => closeDialog();
     document.getElementById("agent24-priceonly-buy").onclick = async () => {
-      await resolveCase("accept");
-      proceedWithOriginal();
+      await completeCurrentCase("accept", false, "PASS");
     };
     focusFirst();
   }
@@ -495,6 +630,7 @@
     dialogElements.screen.innerHTML = `
       <p class="agent24-label">AGENT24 · 결제 직전 개입</p>
       <h2 id="agent24-title">${escapeAttr(q.text)}</h2>
+      ${caseProgressHtml()}
       ${renderBudgetBlock(result.budget)}
       ${optionsHtml}
       ${
@@ -551,6 +687,7 @@
     dialogElements.screen.innerHTML = `
       <p class="agent24-label">AGENT24 · 자율 조사 진행 중</p>
       <h2 id="agent24-title">플래닝 모드</h2>
+      ${caseProgressHtml()}
       <p id="agent24-investigating-line">${INVESTIGATING_LINES[0]}</p>
       <p class="agent24-hint" id="agent24-investigating-elapsed">0초 경과</p>
     `;
@@ -630,6 +767,7 @@
     dialogElements.screen.innerHTML = `
       <p class="agent24-label">AGENT24 · 규칙 엔진 판정</p>
       <p class="agent24-verdict-badge agent24-verdict-${verdict}">${VERDICT_LABELS[verdict] || verdict}</p>
+      ${caseProgressHtml()}
       <p>${escapeAttr(result.summary || "")}</p>
       ${result.capped_reason ? `<p class="agent24-hint">${escapeAttr(result.capped_reason)}</p>` : ""}
       ${claimsHtml ? `<div class="agent24-claims"><p class="agent24-section-title">주장 분해</p>${claimsHtml}</div>` : ""}
@@ -649,23 +787,71 @@
     `;
 
     document.getElementById("agent24-verdict-accept").onclick = async () => {
-      await resolveCase("accept");
-      if (verdict === "PASS" || verdict === "WARN") {
-        proceedWithOriginal();
-      } else {
-        closeDialog();
-      }
+      const blocksCheckout = verdict === "HOLD" || verdict === "STRONG_HOLD";
+      await completeCurrentCase("accept", blocksCheckout, verdict);
     };
     document.getElementById("agent24-verdict-override").onclick = async () => {
-      await resolveCase("override");
-      proceedWithOriginal();
+      await completeCurrentCase("override", false, verdict);
     };
     focusFirst();
   }
 
-  async function resolveCase(action, reason = "") {
+  async function completeCurrentCase(action, blocksCheckout, verdict) {
+    const item = wizard.items[wizard.currentIndex];
+    wizard.decisions.push({
+      caseId: wizard.caseId,
+      action,
+      blocksCheckout,
+      verdict,
+      name: item.name,
+    });
+
+    if (wizard.currentIndex < wizard.items.length - 1) {
+      wizard.currentIndex += 1;
+      await startCurrentCase();
+      return;
+    }
+
+    const blocked = wizard.decisions.filter((decision) => decision.blocksCheckout);
+    if (blocked.length) {
+      for (const decision of blocked) {
+        await resolveCase(decision.action, "", decision.caseId);
+      }
+      renderBlockedCartScreen(blocked);
+      return;
+    }
+
+    for (const decision of wizard.decisions) {
+      await resolveCase(decision.action, "", decision.caseId);
+    }
+    proceedWithOriginal();
+  }
+
+  function renderBlockedCartScreen(blocked) {
+    dialogElements.screen.innerHTML = `
+      <p class="agent24-label">AGENT24 · 전체 상품 판단 완료</p>
+      <h2 id="agent24-title">결제를 진행하지 않았습니다</h2>
+      <p>다음 상품의 보류 판정을 수용했어요.</p>
+      <div class="agent24-claims">
+        ${blocked
+          .map(
+            (decision) =>
+              `<p class="agent24-claim">· ${escapeAttr(decision.name)} — ${VERDICT_LABELS[decision.verdict] || decision.verdict}</p>`,
+          )
+          .join("")}
+      </div>
+      <p class="agent24-hint">장바구니에서 해당 상품을 제외한 뒤 다시 결제해 주세요.</p>
+      <div class="agent24-actions">
+        <button type="button" class="agent24-button agent24-button-primary" id="agent24-cart-close">확인</button>
+      </div>
+    `;
+    document.getElementById("agent24-cart-close").onclick = () => closeDialog();
+    focusFirst();
+  }
+
+  async function resolveCase(action, reason = "", caseId = wizard.caseId) {
     try {
-      await callBackend(`/api/case/${wizard.caseId}/resolve`, { action, reason }, 8000);
+      await callBackend(`/api/case/${caseId}/resolve`, { action, reason }, 8000);
     } catch {
       // Even if logging the resolution fails, still honor the user's choice at the call site.
     }
@@ -674,10 +860,6 @@
   // ---- Interception (unchanged) -------------------------------------------------
 
   function interceptClick(event) {
-    if (isBypassActive()) {
-      return;
-    }
-
     const control = getInteractiveControl(event.target);
     if (!control) {
       return;
@@ -688,6 +870,19 @@
       if (control.form instanceof HTMLFormElement) {
         allowedForms.add(control.form);
       }
+      return;
+    }
+
+    if (isCartCheckoutControl(control)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      saveCartItems(control)
+        .catch(() => {})
+        .finally(() => replayControl(control));
+      return;
+    }
+
+    if (isBypassActive()) {
       return;
     }
 

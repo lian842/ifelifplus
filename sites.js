@@ -24,6 +24,8 @@
         /\/checkout(?:\/|$)/i,
         /\/payment(?:\/|$)/i,
       ],
+      cartPaths: [/\/cartView\.pang$/i],
+      cartCheckoutSelector: "a#btnPay.goPayment[role='button']",
       // Deliberately the shared KOREAN_PAYMENT_WORDS (NOT extended with
       // "바로구매") — "바로구매" on the product page is intentionally let
       // through untouched. The wizard should trigger exactly once, on the
@@ -54,6 +56,64 @@
           if (numbers.length) price = Math.min(...numbers);
         }
         return { name: name || null, price };
+      },
+      // Verified against Coupang's cart DOM (2026-08-02). Start from each
+      // selected product checkbox and stop at the first ancestor containing
+      // that product's price and quantity, so names and prices never get
+      // paired by their unrelated page-wide order.
+      scrapeCartItems() {
+        const seenRows = new Set();
+        const seenProducts = new Set();
+        return Array.from(
+          document.querySelectorAll('input[type="checkbox"][title]:checked'),
+        ).flatMap((checkbox) => {
+          let row = checkbox.parentElement;
+          let levels = 0;
+          while (
+            row &&
+            levels < 6 &&
+            !(
+              row.querySelector('[data-component-id="price-area"]') &&
+              row.querySelector(".cart-quantity-input") &&
+              row.querySelectorAll('[data-component-id="price-area"]').length === 1
+            )
+          ) {
+            row = row.parentElement;
+            levels += 1;
+          }
+          if (!row || levels >= 6) return [];
+          if (seenRows.has(row)) return [];
+          seenRows.add(row);
+
+          const priceArea = row.querySelector('[data-component-id="price-area"]');
+          const priceSpans = Array.from(priceArea.querySelectorAll("span"));
+          const splitPriceNode = priceSpans.find((span) => {
+            const value = span.textContent?.trim() || "";
+            const unit = span.nextElementSibling?.textContent?.trim() || "";
+            return /^[\d,]+$/.test(value) && unit === "원";
+          });
+          const combinedPriceNode = priceSpans.find((span) => {
+            const value = span.textContent?.trim() || "";
+            return (
+              /^[\d,]+\s*원$/.test(value) &&
+              !span.classList?.contains("twc-line-through") &&
+              !span.closest?.(".twc-line-through")
+            );
+          });
+          const priceText =
+            splitPriceNode?.textContent || combinedPriceNode?.textContent || "";
+          const price = Number(priceText.replace(/[^\d]/g, ""));
+          const quantity = Number(row.querySelector(".cart-quantity-input")?.value) || 1;
+          const name = checkbox.getAttribute("title")?.trim();
+          const productHref = row
+            .querySelector('a[href*="/vp/products/"]')
+            ?.getAttribute("href");
+          const productKey = `${productHref || name}|${price}|${quantity}`;
+
+          if (!name || price <= 0 || seenProducts.has(productKey)) return [];
+          seenProducts.add(productKey);
+          return [{ name, price, quantity }];
+        });
       },
     },
     {
