@@ -164,7 +164,7 @@ html.agent24-dialog-open { overflow: hidden !important; }
   color: #30373b;
   font-size: 56px;
   font-weight: 550;
-  line-height: .92;
+  line-height: 1;
   letter-spacing: 0;
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: "tnum" 1, "lnum" 1;
@@ -189,17 +189,21 @@ html.agent24-dialog-open { overflow: hidden !important; }
 }
 #agent24-purchase-guard .agent24-concept-result {
   min-height: 18px;
-  margin: 8px 0 0;
+  margin: 14px 0 0;
   color: rgba(68, 85, 94, .48);
   font-size: 13px;
   font-weight: 450;
-  line-height: 18px;
+  line-height: 1.45;
   white-space: nowrap;
 }
 #agent24-purchase-guard .agent24-concept-result strong {
   color: rgba(49, 62, 69, .76);
   font-weight: 570;
 }
+#agent24-purchase-guard .agent24-dialog[data-balance="remaining"] .agent24-concept-result strong { color: rgba(49, 62, 69, .68); }
+#agent24-purchase-guard .agent24-dialog[data-balance="zero"] .agent24-balance h1 { color: #42494d; }
+#agent24-purchase-guard .agent24-dialog[data-balance="zero"] .agent24-concept-result strong { color: rgba(70, 79, 84, .7); }
+#agent24-purchase-guard .agent24-dialog[data-balance="shortage"] .agent24-concept-result strong { color: rgba(49, 62, 69, .78); }
 #agent24-purchase-guard[data-concept="b"] .agent24-balance h1 { font-size: clamp(38px, 4.8vw, 50px); letter-spacing: -.05em; }
 #agent24-purchase-guard[data-concept="d"] .agent24-concept-label { letter-spacing: .08em; }
 #agent24-purchase-guard[data-concept="d"] .agent24-orbit-result { position: relative; display: inline-flex; align-items: center; gap: 8px; }

@@ -484,8 +484,8 @@
     const balanceMessage = after < 0
       ? "이 구매에는 이만큼 더 필요해요"
       : after === 0
-        ? "이 구매로 이번 달 여유금액을 모두 사용해요"
-        : "이 구매 후에도 이만큼 남아요";
+        ? "이 구매로 이번 달 여유금액을 모두 써요"
+        : "이 구매 후에는 이만큼만 남아요";
     const ticker = items
       .map((item) => `<span>${escapeAttr(item.name)} · ${formatWon(Number(item.price) * Number(item.quantity || 1))}</span>`)
       .join("");
@@ -495,6 +495,11 @@
       : after < budget.remaining * 0.25
         ? "tight"
         : "calm";
+    dialogElements.dialog.dataset.balance = after < 0
+      ? "shortage"
+      : after === 0
+        ? "zero"
+        : "remaining";
     dialogElements.screen.innerHTML = `
       <div class="agent24-context">
         <section class="agent24-balance">
