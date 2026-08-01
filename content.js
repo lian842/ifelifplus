@@ -97,7 +97,7 @@
   }
 
   function lianBareMark() {
-    return `<svg viewBox="0 0 340 340" aria-hidden="true"><circle fill="#D4D4D4" cx="170" cy="170" r="104"/><g transform="rotate(-40 107 140)"><path class="agent24-mark-eye" fill="#F5823A" d="M107 140L140.96 122.96L150.2 157.04Z"/></g></svg>`;
+    return `<svg viewBox="0 0 340 340" aria-hidden="true"><circle fill="#D4D4D4" cx="170" cy="170" r="104"/><g class="agent24-eye-orbit"><g transform="rotate(-40 107 140)"><path class="agent24-mark-eye" fill="#F5823A" d="M107 140L140.96 122.96L150.2 157.04Z"/></g></g></svg>`;
   }
 
   function enterBrandThinking() {
@@ -738,18 +738,21 @@
       .map((entry) => {
         const result = entry.final;
         const verdict = result.verdict || "WARN";
-        const reasons = (result.breakdown || [])
+        const reasons = [...new Set((result.breakdown || [])
           .filter((item) => item.key !== "dark_pattern_detected")
-          .map((item) => `<li>${escapeAttr(item.label)}</li>`)
+          .map((item) => item.label)
+          .filter(Boolean))];
+        const reasonItems = reasons
+          .map((reason) => `<li>${escapeAttr(reason)}</li>`)
           .join("");
         return `
           <article class="agent24-batch-feedback-card">
-            <div>
-              <span class="agent24-verdict-badge agent24-verdict-${verdict}">${VERDICT_LABELS[verdict] || verdict}</span>
+            <div class="agent24-feedback-card-head">
               <strong>${escapeAttr(entry.item.name)}</strong>
+              <span class="agent24-verdict-badge agent24-verdict-${verdict}">${VERDICT_LABELS[verdict] || verdict}</span>
             </div>
             <p>${escapeAttr(result.summary || "확인된 소비 조건을 다시 살펴보세요.")}</p>
-            ${reasons ? `<ul>${reasons}</ul>` : ""}
+            ${reasonItems ? `<details><summary>판단 근거 ${reasons.length}개</summary><ul>${reasonItems}</ul></details>` : ""}
           </article>`;
       })
       .join("");
@@ -761,9 +764,8 @@
     dialogElements.dialog.dataset.mood = hasHold ? "tight" : "calm";
     dialogElements.screen.innerHTML = `
       <div class="agent24-batch-feedback">
-        <p class="agent24-kicker">전체 상품 분석 완료</p>
-        <h1 id="agent24-title">다시 볼 상품만 모았어요</h1>
-        <p class="agent24-hint">문제가 확인되지 않은 상품은 제외했습니다.</p>
+        <h1 id="agent24-title">잠깐, ${flagged.length}개 상품만 다시 볼까요?</h1>
+        <p class="agent24-hint">나머지는 특별한 문제를 찾지 못했어요.</p>
         <div class="agent24-batch-feedback-list">${cardsHtml}</div>
         <div class="agent24-actions">
           <button type="button" class="agent24-button agent24-button-primary" id="agent24-batch-accept">${hasHold ? "추천대로 멈추기" : "확인하고 결제하기"}</button>
