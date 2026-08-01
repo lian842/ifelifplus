@@ -97,7 +97,7 @@ PROFILES: dict[str, dict[str, Any]] = {
             {"name": "음악 스트리밍", "amount": 10_900},
             {"name": "쇼핑앱 멤버십", "amount": 4_900},
         ],
-        "monthly_free_budget": 300_000,
+        "monthly_free_budget": 1_550_000,
         "seed_spent_this_month": 50_000,
         "payday": 25,
         "hourly_wage": 10_500,
