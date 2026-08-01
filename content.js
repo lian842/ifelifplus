@@ -514,7 +514,7 @@
     dialogElements.screen.innerHTML = `
       <div class="agent24-context">
         <section class="agent24-balance">
-          <p class="agent24-concept-label">이번 달 여유금액 · ${formatWon(budget.remaining)}</p>
+          <p class="agent24-concept-label">이번 달 여유금액: ${formatWon(budget.remaining)}</p>
           <h1 id="agent24-title" aria-label="${formatWon(Math.abs(after))}">${formatBalanceAmount(after)}</h1>
           <p class="agent24-concept-result"><strong>${balanceMessage}</strong></p>
         </section>

@@ -23,7 +23,7 @@
     return `
       <div class="agent24-context">
         <section class="agent24-balance">
-          <p class="agent24-concept-label">이번 달 여유금액 · 160,540원</p>
+          <p class="agent24-concept-label">이번 달 여유금액: 160,540원</p>
           <h1 id="agent24-title"><span class="agent24-amount-number">${state.amount}</span><span class="agent24-amount-unit">원</span></h1>
           <p class="agent24-concept-result"><strong>${state.message}</strong></p>
         </section>
