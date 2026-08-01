@@ -192,7 +192,7 @@
   // tab, so a short time-boxed bypass here covers "the rest of this same checkout."
 
   const BYPASS_KEY = "agent24_bypass_until";
-  const BYPASS_WINDOW_MS = 5 * 60 * 1000;
+  const BYPASS_WINDOW_MS = 10 * 1000;
   const CART_ITEMS_KEY = "agent24_coupang_cart_items";
   const CART_ITEMS_TTL_MS = 10 * 60 * 1000;
 
