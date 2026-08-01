@@ -29,6 +29,7 @@
   const allowedForms = new WeakSet();
 
   let dialogElements = null;
+  let brandRestoreTimer = null;
   let resumeAction = null;
   let previouslyFocused = null;
   let wizard = null; // { caseId, items, currentIndex, decisions }
@@ -97,6 +98,21 @@
 
   function lianBareMark() {
     return `<svg viewBox="0 0 340 340" aria-hidden="true"><circle fill="#D4D4D4" cx="170" cy="170" r="104"/><path transform="rotate(-40 107 140)" fill="#F5823A" d="M107 140L140.96 122.96L150.2 157.04Z"/></svg>`;
+  }
+
+  function enterBrandThinking() {
+    clearTimeout(brandRestoreTimer);
+    dialogElements.dialog.dataset.brandState = "thinking";
+  }
+
+  function restoreBrand() {
+    const copy = dialogElements.dialog.querySelector(".agent24-brand span");
+    if (copy) copy.textContent = "현명한 소비를 도와드릴게요";
+    dialogElements.dialog.dataset.brandState = "returning";
+    clearTimeout(brandRestoreTimer);
+    brandRestoreTimer = setTimeout(() => {
+      if (dialogElements?.dialog) dialogElements.dialog.dataset.brandState = "restored";
+    }, 760);
   }
 
   // ---- Dialog shell -------------------------------------------------
@@ -588,6 +604,7 @@
   }
 
   function renderBatchThinkingScreen(line) {
+    enterBrandThinking();
     dialogElements.dialog.dataset.mood = "thinking";
     dialogElements.screen.innerHTML = `
       <div class="agent24-analysis-wrap">
@@ -634,10 +651,10 @@
       })
       .join("");
 
+    restoreBrand();
     dialogElements.dialog.dataset.mood = "calm";
     dialogElements.screen.innerHTML = `
       <div class="agent24-batch-interview">
-        <p class="agent24-kicker">한 번만 답해주세요</p>
         <h1 id="agent24-title">상품별로 짧게 확인할게요</h1>
         <div class="agent24-batch-question-list">${questionsHtml}</div>
         <button type="button" class="agent24-main-action" id="agent24-batch-submit" disabled>한 번에 분석하기 <span>→</span></button>
@@ -740,6 +757,7 @@
       ["HOLD", "STRONG_HOLD"].includes(entry.final.verdict),
     );
 
+    restoreBrand();
     dialogElements.dialog.dataset.mood = hasHold ? "tight" : "calm";
     dialogElements.screen.innerHTML = `
       <div class="agent24-batch-feedback">
