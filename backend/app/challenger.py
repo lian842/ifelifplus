@@ -92,10 +92,17 @@ SYSTEM_PROMPT = """\
    추측으로 반박하는 것은 심각한 오류다.
    web_search 결과가 비어 있거나 무관하면 없는 것으로 취급하라.
 
-5. 질문은 한 번에 하나만.
-   현재 가장 약한 주장 하나를 골라 되묻는다.
-   정해진 설문지를 순서대로 읽지 마라.
-   되물을 필요가 없으면 follow_up_question을 null로 두어라.
+4-1. 다만 **못 한 이유를 설명하지는 마라.**
+   "상품 정보가 제공되지 않아서", "용량·수량이 확인되지 않아서" 같은 우리 쪽 사정은
+   사용자가 알 바 아니고 고칠 수도 없다. 변명은 정직이 아니라 소음이다.
+   못 찾았으면 "확인하지 못했습니다" 한 마디로 끝내고, 찾은 것만 말하라.
+
+5. 되묻지 마라.
+   사용자 입력은 이미 끝났다. 네 보고 다음은 곧바로 규칙 엔진의 판정이고,
+   그 화면에는 답을 받을 입력칸이 없다. 답할 수 없는 질문을 남기는 것은
+   사용자에게 숙제를 떠넘기는 것이다.
+   확인하지 못한 것은 질문이 아니라 claim의 status(unverifiable)로 남겨라.
+   summary도 질문으로 끝내지 마라. 사실 진술로 끝낸다.
 
 6. 종료 시점을 스스로 판단하라.
    근거가 충분하면 즉시 조사를 끝내고 판정 단계로 넘긴다.
@@ -155,12 +162,18 @@ class Findings(BaseModel):
     verified_lowest_price: bool = Field(description="실제로 최저가임을 확인했는가. 미확인이면 false")
     price_claim_unverified: bool = Field(description="가격·희소성 주장을 검증하지 못했는가")
     alternative_found: bool
-    alternative_summary: str = Field(description="대안 요약. 없으면 '대안을 찾지 못했습니다'")
+    alternative_summary: str = Field(
+        description="대안 요약. 찾은 것만 적는다. 없으면 '대안을 찾지 못했습니다' 한 문장. "
+                    "'상품 정보가 제공되지 않아…', '규격이 확인되지 않아…' 같은 "
+                    "우리 쪽 사정 설명을 쓰지 마라. 사용자가 알 바 아니고 고칠 수도 없다"
+    )
     annual_saving: int = Field(
         description="구조적 대안으로 바꿨을 때의 연간 절약액(원). 계산 못 했으면 0. 추정하지 말 것"
     )
-    summary: str = Field(description="사용자에게 보여줄 사실 요약. 3문장 이내. 인격 언급 금지")
-    follow_up_question: str | None = Field(description="가장 약한 주장 하나에 대한 되물음. 없으면 null")
+    summary: str = Field(
+        description="사용자에게 보여줄 사실 요약. 3문장 이내. 인격 언급 금지. "
+                    "질문으로 끝내지 마라 — 답을 받을 입력칸이 없다. 사실 진술로 끝낸다"
+    )
 
 
 class QuestionOption(BaseModel):

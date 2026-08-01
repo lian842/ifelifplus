@@ -821,7 +821,6 @@
         ${savings.work_hours_saved ? ` · 노동 ${savings.work_hours_saved.toFixed(1)}시간` : ""}
       </p>
       ${renderOffersBlock(savings, result.alternative)}
-      ${result.follow_up_question ? `<p class="agent24-followup">${escapeAttr(result.follow_up_question)}</p>` : ""}
       ${holdHtml}
       ${result.agent_error ? `<p class="agent24-hint">일부 조사에 실패했지만 확인된 정보만으로 판정했습니다.</p>` : ""}
       <div class="agent24-actions">

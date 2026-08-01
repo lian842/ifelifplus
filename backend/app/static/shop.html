@@ -367,7 +367,6 @@ function renderVerdict(res) {
     <ul class="bd">${bd || '<li>해당 항목 없음</li>'}</ul>
     ${savingsBox(res.savings)}
     ${res.alternative && res.alternative.summary ? `<p>${res.alternative.summary}</p>` : ''}
-    ${res.follow_up_question ? `<p class="muted">에이전트의 되물음</p><p><b>${res.follow_up_question}</b></p>` : ''}
     ${res.agent_memories && res.agent_memories.length ? `<p class="muted">에이전트가 스스로 기록한 관찰</p><ul class="bd">${res.agent_memories.map(m=>`<li>${m.text} <span class="muted">(${m.confidence})</span></li>`).join('')}</ul>` : ''}
     ${res.release_at ? `<p class="muted">재검토 예약: <code class="small">${res.release_at}</code> — 이 시각이 되면 <b>사용자 입력 없이</b> 에이전트가 스스로 깨어납니다.</p>` : ''}
     ${res.agent_error ? `<p class="muted">에이전트 오류: <code class="small">${res.agent_error}</code></p>` : ''}
