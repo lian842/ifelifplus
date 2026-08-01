@@ -154,6 +154,16 @@ html.agent24-dialog-open {
   height: 100%;
   display: block;
 }
+#agent24-purchase-guard .agent24-eye-orbit {
+  transform-box: view-box;
+  transform-origin: 170px 170px;
+  animation: agent24-eye-orbit 4.8s ease-in-out infinite;
+}
+#agent24-purchase-guard .agent24-mark-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: agent24-eye-pivot 2.4s ease-in-out infinite;
+}
 #agent24-purchase-guard .agent24-brand span {
   color: rgba(58, 72, 79, 0.64);
   font-size: 14px;
@@ -663,14 +673,16 @@ html.agent24-dialog-open {
   cursor: pointer;
   transition:
     transform 170ms ease,
-    box-shadow 170ms ease;
+    background 170ms ease,
+    color 170ms ease;
 }
-#agent24-purchase-guard .agent24-prompt button:hover {
+#agent24-purchase-guard .agent24-prompt button:not(:disabled) {
+  color: #fff;
+  background: linear-gradient(135deg, #b8c3e5 0%, #98a9dc 100%);
+}
+#agent24-purchase-guard .agent24-prompt button:not(:disabled):hover {
   transform: translateY(-1px);
-  background: #d9dddf;
-  box-shadow:
-    0 7px 16px rgba(84, 95, 101, 0.09),
-    inset 0 1px 0 rgba(255, 255, 255, 0.76);
+  background: linear-gradient(135deg, #aebbe0 0%, #899cd5 100%);
 }
 #agent24-purchase-guard .agent24-prompt button span {
   font-size: 22px;
@@ -1127,6 +1139,7 @@ html.agent24-dialog-open {
 }
 #agent24-purchase-guard .agent24-batch-interview > .agent24-main-action {
   flex: 0 0 auto;
+  align-self: center;
   margin-top: 18px;
 }
 #agent24-purchase-guard .agent24-main-action:disabled,
@@ -1253,6 +1266,37 @@ html.agent24-dialog-open {
     opacity: 1;
     clip-path: inset(0 0 0 0);
     transform: translateX(0);
+  }
+}
+@keyframes agent24-loading-roll {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes agent24-brand-return {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-360deg);
+  }
+}
+@keyframes agent24-eye-orbit {
+  0%,
+  100% {
+    transform: rotate(-10deg);
+  }
+  50% {
+    transform: rotate(10deg);
+  }
+}
+@keyframes agent24-eye-pivot {
+  0%,
+  100% {
+    transform: rotate(-8deg);
+  }
+  50% {
+    transform: rotate(8deg);
   }
 }
 @keyframes agent24-content-in {

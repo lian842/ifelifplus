@@ -243,19 +243,8 @@ async def create_case(body: CaseIn) -> dict[str, Any]:
         "override_stats": store.override_stats(body.profile_id),
     }
 
-    # price_only: 사용자에게 아무것도 묻지 않는다. 지금 바로 에이전트가 조사한다.
-    if mode["mode"] == "price_only":
-        price, ctx, error = await challenger.price_check(case, profile, classification)
-        case["price_check"] = price
-        case["agent_error"] = error
-        case["verdict"] = "PASS"
-        case["resolved"] = True
-        store.save_case(case)
-        events.emit("system", {"step": "price_only_done", "result": price, "error": error},
-                    case_id=case["case_id"])
-        return {**base, "verdict": "PASS", "price_check": price, "agent_error": error}
-
-    # challenge: 에이전트가 맥락에 맞는 객관식 3개를 설계하고 자유 입력 1개를 함께 준다.
+    # 결제 개입의 핵심은 사용자가 스스로 이유를 한 번 더 확인하는 것이다.
+    # 내부 위험도 분류와 무관하게 모든 정상 추출 상품에 같은 인터뷰 계약을 제공한다.
     question, q_error = await challenger.make_question(case, profile, classification)
     case["question"] = question
     store.save_case(case)
