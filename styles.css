@@ -433,6 +433,10 @@ html.agent24-dialog-open { overflow: hidden !important; }
 #agent24-purchase-guard .agent24-interview-wrap h1,
 #agent24-purchase-guard .agent24-analysis-wrap h1,
 #agent24-purchase-guard .agent24-empty h1 { max-width: 520px; margin: 0; color: #31434c; font-size: 34px; font-weight: 570; line-height: 1.22; letter-spacing: -.045em; }
+#agent24-purchase-guard .agent24-hint { margin: 10px 0 0; color: rgba(68, 85, 94, .47); font-size: 11px; font-weight: 450; line-height: 1.55; }
+#agent24-purchase-guard .agent24-fallback-copy { max-width: 360px; margin: 18px 0 0; color: rgba(68, 85, 94, .52); font-size: 12px; line-height: 1.65; }
+#agent24-purchase-guard .agent24-fallback .agent24-main-action { margin-top: 28px; }
+#agent24-purchase-guard .agent24-fallback .agent24-quiet-action { top: 0; margin-top: 16px; }
 #agent24-purchase-guard .agent24-options { width: min(430px, 100%); display: grid; margin-top: 28px; }
 #agent24-purchase-guard .agent24-option {
   width: 100%;

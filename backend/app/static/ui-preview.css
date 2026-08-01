@@ -1,0 +1,30 @@
+:root { color-scheme: light; background: #eef1f2; }
+* { box-sizing: border-box; }
+html, body { min-height: 100%; margin: 0; }
+body { font-family: SUIT, Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+
+#agent24-purchase-guard.agent24-preview {
+  position: relative !important;
+  inset: auto !important;
+  min-height: 100vh;
+  padding: 28px;
+}
+#agent24-purchase-guard.agent24-preview .agent24-backdrop,
+#agent24-purchase-guard.agent24-preview .agent24-intro-logo { display: none !important; }
+#agent24-purchase-guard.agent24-preview .agent24-dialog {
+  position: relative;
+  inset: auto;
+  width: min(1120px, calc(100vw - 56px));
+  max-height: none;
+  margin: auto;
+  animation: none !important;
+}
+#agent24-purchase-guard.agent24-preview .agent24-main { animation: none !important; }
+#agent24-purchase-guard.agent24-preview .agent24-brand,
+#agent24-purchase-guard.agent24-preview .agent24-brand span,
+#agent24-purchase-guard.agent24-preview .agent24-float { animation-delay: 0s !important; }
+
+@media (max-width: 680px) {
+  #agent24-purchase-guard.agent24-preview { padding: 10px; }
+  #agent24-purchase-guard.agent24-preview .agent24-dialog { width: calc(100vw - 20px); }
+}
