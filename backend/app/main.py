@@ -276,8 +276,8 @@ async def create_case(body: CaseIn) -> dict[str, Any]:
 async def answer(case_id: str, body: AnswerIn) -> dict[str, Any]:
     """사용자 입력은 여기 한 번뿐이다.
 
-    이후 도구 선택, 조사 반복, 종료 시점, 대안 탐색 방식, 메모리 기록은
-    모두 에이전트가 스스로 정한다. 판정만 규칙 엔진이 한다.
+    이후 도구 선택, 조사 반복, 종료 시점, 대안 탐색 방식, 메모리 기록과
+    최종 소비 판정까지 에이전트가 스스로 정한다.
     """
     case = store.get_case(case_id)
     if not case:
@@ -306,28 +306,63 @@ async def answer(case_id: str, body: AnswerIn) -> dict[str, Any]:
     case["agent_actions"] = ctx.applied_actions
     case["agent_memories"] = ctx.memories_written
 
-    verdict = judge.judge(case, profile, case.get("classification", {}), findings)
+    # Legacy rule-engine final judgement (disabled).
+    # 최종 판정 주체를 에이전트로 전환했으므로 점수 합산 결과를 판정이나 폴백에 쓰지 않는다.
+    # rule_verdict = judge.judge(case, profile, case.get("classification", {}), findings)
+    # case["rule_judgement"] = rule_verdict
+
+    agent_level = (findings or {}).get("feedback_level") or "PASS"
+    should_feedback = bool((findings or {}).get("should_feedback", False))
+    if not should_feedback:
+        agent_level = "PASS"
+    elif agent_level == "PASS":
+        agent_level = "WARN"
+
+    # HOLD 판정 이후 재검토 예약 시간만 기존 상수를 재사용한다. 판정 자체에는 관여하지 않는다.
+    hold_minutes = judge.HOLD_MINUTES.get(agent_level)
+    release_at = (
+        store.iso(store.now() + store.timedelta(minutes=hold_minutes))
+        if hold_minutes else None
+    )
+    verdict = {
+        "verdict": agent_level,
+        "risk_score": None,
+        "breakdown": [],
+        "hold_minutes": hold_minutes,
+        "release_at": release_at,
+        "capped_reason": None,
+        "source": "agent",
+        "feedback_reason": (findings or {}).get("feedback_reason") or "",
+    }
     case["judgement"] = verdict
-    case["verdict"] = verdict["verdict"]
-    case["release_at"] = verdict["release_at"]
-    case["resolved"] = verdict["verdict"] in ("PASS", "WARN")
+    case["verdict"] = agent_level
+    case["release_at"] = release_at
+    case["resolved"] = agent_level in ("PASS", "WARN")
     store.save_case(case)
 
     events.emit("system", {
-        "step": "verdict", "verdict": verdict["verdict"], "risk_score": verdict["risk_score"],
-        "breakdown": verdict["breakdown"], "release_at": verdict["release_at"],
-        "note": "판정은 LLM이 아니라 규칙 엔진이 계산했다.",
+        "step": "verdict", "verdict": agent_level, "risk_score": None,
+        "breakdown": [], "release_at": verdict["release_at"],
+        "should_feedback": should_feedback,
+        "note": "최종 소비 판정과 피드백 여부는 조사 에이전트가 직접 결정했다.",
     }, case_id=case_id)
 
     return {
         "case_id": case_id,
-        "verdict": verdict["verdict"],
+        "verdict": agent_level,
+        "should_feedback": should_feedback,
+        "feedback_reason": (findings or {}).get("feedback_reason") or "",
+        "rule_verdict": None,
         "risk_score": verdict["risk_score"],
         "breakdown": verdict["breakdown"],
         "hold_minutes": verdict["hold_minutes"],
         "release_at": verdict["release_at"],
         "capped_reason": verdict["capped_reason"],
-        "summary": (findings or {}).get("summary") or _fallback_summary(error),
+        "summary": (
+            (findings or {}).get("feedback_reason")
+            or (findings or {}).get("summary")
+            or _fallback_summary(error)
+        ),
         "claims": (findings or {}).get("claims", []),
         "alternative": {
             "found": (findings or {}).get("alternative_found", False),
@@ -347,7 +382,7 @@ async def answer(case_id: str, body: AnswerIn) -> dict[str, Any]:
 
 def _fallback_summary(error: str | None) -> str:
     if error:
-        return "에이전트 조사에 실패했습니다. 아래 판정은 확인된 사실(예산·이력·시각)만으로 계산되었습니다."
+        return "에이전트 조사에 실패해 소비 판정을 만들지 못했습니다."
     return "조사 결과가 비어 있습니다."
 
 

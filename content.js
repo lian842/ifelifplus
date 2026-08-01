@@ -718,14 +718,23 @@
       return;
     }
 
-    const flagged = wizard.cases.filter(
-      (entry) => entry.final?.verdict && entry.final.verdict !== "PASS",
-    );
+    const flagged = wizard.cases.filter(entryWantsFeedback);
     if (!flagged.length) {
       await resolveBatchCases(false);
       return;
     }
     renderBatchFeedbackScreen(flagged);
+  }
+
+  function entryWantsFeedback(entry) {
+    const result = entry?.final;
+    if (!result) return false;
+    if (typeof result.should_feedback === "boolean") {
+      return result.should_feedback;
+    }
+    // Backward compatibility while an already-running backend still returns
+    // the pre-agent-verdict response shape.
+    return Boolean(result.verdict && result.verdict !== "PASS");
   }
 
   function renderBatchFeedbackScreen(flagged) {
@@ -784,9 +793,7 @@
   }
 
   async function resolveBatchCases(blockCheckout, overrideFlagged = false) {
-    const flagged = wizard.cases.filter(
-      (entry) => entry.final?.verdict && entry.final.verdict !== "PASS",
-    );
+    const flagged = wizard.cases.filter(entryWantsFeedback);
     const holds = flagged.filter((entry) =>
       ["HOLD", "STRONG_HOLD"].includes(entry.final.verdict),
     );
@@ -800,7 +807,7 @@
     await Promise.all(
       wizard.cases.map((entry) =>
         resolveCase(
-          overrideFlagged && entry.final?.verdict !== "PASS" ? "override" : "accept",
+          overrideFlagged && entryWantsFeedback(entry) ? "override" : "accept",
           "",
           entry.caseId,
         ),
