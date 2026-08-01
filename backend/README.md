@@ -33,7 +33,7 @@ cd backend && ../.venv/bin/python -m uvicorn app.main:app --port 8787
      │            price_only : 심문 없음. 입력 0회로 즉시 최저가 조사. 마찰 금지
      │            challenge  : 질문 1회 → 자율 조사 → 판정 → 마찰
      │
-[4] 질문    (challenge일 때) 에이전트가 질문 형식과 선택지를 설계해 응답에 담아 보냄
+[4] 질문    (challenge일 때) 에이전트가 맥락별 객관식 3개를 설계하고 자유 입력 1개를 함께 보냄
      │
 [5] 조사    POST /api/case/{id}/answer   ★ 사용자 입력은 여기 1회가 전부
      │       └ 도구 선택·조사 반복·종료 시점·대안 방식·메모리 기록을 에이전트가 스스로 결정
@@ -104,10 +104,14 @@ const res = await post('/api/case', {
 
   // mode === "challenge" 일 때만
   "question": {
-    "format": "choice",                 // "choice" | "text"
+    "format": "choice",                 // 항상 choice
     "text": "보유 중인 텀블러가 5개인데 ...",
-    "options": [{ "id": "opt1", "label": "...", "implies": "necessity" }],
-    "allow_free_text": true,
+    "options": [                         // 항상 정확히 3개
+      { "id": "opt1", "label": "...", "implies": "necessity" },
+      { "id": "opt2", "label": "...", "implies": "price_urgency" },
+      { "id": "opt3", "label": "...", "implies": "other" }
+    ],
+    "allow_free_text": true,             // 자유 입력 1개 항상 제공
     "free_text_placeholder": "...",
     "reason": "이 형식을 고른 이유"       // 심사·디버깅용
   },
@@ -130,7 +134,7 @@ const res = await post('/api/case', {
 | --- | --- |
 | `parse_failed === true` | "상품 정보를 추출하지 못했습니다" — 막지 않는다 |
 | `mode === "price_only"` | 최저가·대안만 표시. 심문·마찰 없음. 확인 버튼 하나 |
-| `mode === "challenge"` | `question` 렌더 (`format`에 따라 라디오/체크박스 또는 textarea) |
+| `mode === "challenge"` | 객관식 라디오 3개와 자유 입력 textarea 1개 렌더 |
 
 ### 3. 답변 전송 (사용자 입력은 여기가 마지막)
 
