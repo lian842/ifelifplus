@@ -730,7 +730,7 @@
 
   function renderBatchFeedbackScreen(flagged) {
     const cardsHtml = flagged
-      .map((entry) => {
+      .map((entry, index) => {
         const result = entry.final;
         const verdict = result.verdict || "WARN";
         const reasons = [...new Set((result.breakdown || [])
@@ -746,7 +746,10 @@
               <strong>${escapeAttr(entry.item.name)}</strong>
               <span class="agent24-verdict-badge agent24-verdict-${verdict}">${VERDICT_LABELS[verdict] || verdict}</span>
             </div>
-            <p>${escapeAttr(result.summary || "확인된 소비 조건을 다시 살펴보세요.")}</p>
+            <div class="agent24-feedback-summary">
+              <p id="agent24-feedback-summary-${index}">${escapeAttr(result.summary || "확인된 소비 조건을 다시 살펴보세요.")}</p>
+              <button type="button" aria-expanded="false" aria-controls="agent24-feedback-summary-${index}" hidden>더 보기</button>
+            </div>
             ${reasonItems ? `<details><summary>판단 근거 ${reasons.length}개</summary><ul>${reasonItems}</ul></details>` : ""}
           </article>`;
       })
@@ -772,6 +775,19 @@
       resolveBatchCases(hasHold);
     document.getElementById("agent24-batch-override").onclick = () =>
       resolveBatchCases(false, true);
+    requestAnimationFrame(() => {
+      dialogElements.screen.querySelectorAll(".agent24-feedback-summary").forEach((summary) => {
+        const copy = summary.querySelector("p");
+        const toggle = summary.querySelector("button");
+        if (!copy || !toggle || copy.scrollHeight <= copy.clientHeight + 1) return;
+        toggle.hidden = false;
+        toggle.onclick = () => {
+          const expanded = summary.classList.toggle("is-expanded");
+          toggle.setAttribute("aria-expanded", String(expanded));
+          toggle.textContent = expanded ? "접기" : "더 보기";
+        };
+      });
+    });
     focusFirst();
   }
 
