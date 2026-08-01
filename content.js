@@ -213,6 +213,8 @@
   const BYPASS_WINDOW_MS = 10 * 1000;
   const CART_ITEMS_KEY = "agent24_coupang_cart_items";
   const CART_ITEMS_TTL_MS = 10 * 60 * 1000;
+  const OBSERVED_PRODUCT_KEY = "agent24_observed_product";
+  const OBSERVED_PRODUCT_TTL_MS = 10 * 60 * 1000;
 
   function isCartPage() {
     return Boolean(
@@ -271,6 +273,42 @@
     }
   }
 
+  async function saveObservedProduct(product) {
+    if (!product?.name || Number(product.price) <= 0) return;
+    await chrome.storage.local.set({
+      [OBSERVED_PRODUCT_KEY]: {
+        savedAt: Date.now(),
+        siteId: currentSite.id,
+        item: {
+          name: product.name,
+          price: Number(product.price),
+          quantity: 1,
+        },
+      },
+    });
+  }
+
+  async function loadObservedProduct() {
+    try {
+      const stored = (await chrome.storage.local.get(OBSERVED_PRODUCT_KEY))[
+        OBSERVED_PRODUCT_KEY
+      ];
+      if (
+        !stored ||
+        stored.siteId !== currentSite.id ||
+        Date.now() - Number(stored.savedAt) > OBSERVED_PRODUCT_TTL_MS ||
+        !stored.item?.name ||
+        Number(stored.item.price) <= 0
+      ) {
+        await chrome.storage.local.remove(OBSERVED_PRODUCT_KEY);
+        return null;
+      }
+      return stored.item;
+    } catch {
+      return null;
+    }
+  }
+
   function armBypass() {
     try {
       sessionStorage.setItem(BYPASS_KEY, String(Date.now() + BYPASS_WINDOW_MS));
@@ -291,6 +329,7 @@
   function proceedWithOriginal() {
     armBypass();
     chrome.storage.local.remove(CART_ITEMS_KEY).catch(() => {});
+    chrome.storage.local.remove(OBSERVED_PRODUCT_KEY).catch(() => {});
     resumeAction?.();
     closeDialog();
   }
@@ -399,6 +438,7 @@
       }
       if (scraped?.name || attempts >= 5) {
         if (scraped?.name) {
+          saveObservedProduct(scraped).catch(() => {});
           callBackend(
             "/api/observe",
             {
@@ -479,6 +519,9 @@
   async function readCheckoutItems() {
     const { items: cartItems } = await loadCartItems();
     if (cartItems.length) return cartItems;
+
+    const observedProduct = await loadObservedProduct();
+    if (observedProduct) return [observedProduct];
 
     try {
       const item = currentSite.scrapeProduct?.();
