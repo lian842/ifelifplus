@@ -763,14 +763,23 @@
       return;
     }
 
-    const flagged = wizard.cases.filter(
-      (entry) => entry.final?.verdict && entry.final.verdict !== "PASS",
-    );
+    const flagged = wizard.cases.filter(entryWantsFeedback);
     if (!flagged.length) {
       await resolveBatchCases(false);
       return;
     }
     renderBatchFeedbackScreen(flagged);
+  }
+
+  function entryWantsFeedback(entry) {
+    const result = entry?.final;
+    if (!result) return false;
+    if (typeof result.should_feedback === "boolean") {
+      return result.should_feedback;
+    }
+    // Backward compatibility while an already-running backend still returns
+    // the pre-agent-verdict response shape.
+    return Boolean(result.verdict && result.verdict !== "PASS");
   }
 
   function renderBatchFeedbackScreen(flagged) {
@@ -827,25 +836,26 @@
     document.getElementById("agent24-batch-override").onclick = () =>
       resolveBatchCases(false, true);
     requestAnimationFrame(() => {
-      dialogElements.screen.querySelectorAll(".agent24-feedback-summary").forEach((summary) => {
-        const copy = summary.querySelector("p");
-        const toggle = summary.querySelector("button");
-        if (!copy || !toggle || copy.scrollHeight <= copy.clientHeight + 1) return;
-        toggle.hidden = false;
-        toggle.onclick = () => {
-          const expanded = summary.classList.toggle("is-expanded");
-          toggle.setAttribute("aria-expanded", String(expanded));
-          toggle.textContent = expanded ? "접기" : "더 보기";
-        };
-      });
+      dialogElements.screen
+        .querySelectorAll(".agent24-feedback-summary")
+        .forEach((summary) => {
+          const copy = summary.querySelector("p");
+          const toggle = summary.querySelector("button");
+          if (!copy || !toggle || copy.scrollHeight <= copy.clientHeight + 1)
+            return;
+          toggle.hidden = false;
+          toggle.onclick = () => {
+            const expanded = summary.classList.toggle("is-expanded");
+            toggle.setAttribute("aria-expanded", String(expanded));
+            toggle.textContent = expanded ? "접기" : "더 보기";
+          };
+        });
     });
     focusFirst();
   }
 
   async function resolveBatchCases(blockCheckout, overrideFlagged = false) {
-    const flagged = wizard.cases.filter(
-      (entry) => entry.final?.verdict && entry.final.verdict !== "PASS",
-    );
+    const flagged = wizard.cases.filter(entryWantsFeedback);
     const holds = flagged.filter((entry) =>
       ["HOLD", "STRONG_HOLD"].includes(entry.final.verdict),
     );

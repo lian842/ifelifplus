@@ -98,7 +98,7 @@ PROFILES: dict[str, dict[str, Any]] = {
             {"name": "쇼핑앱 멤버십", "amount": 4_900},
         ],
         "monthly_free_budget": 300_000,
-        "seed_spent_this_month": 139_460,
+        "seed_spent_this_month": 50_000,
         "payday": 25,
         "hourly_wage": 10_500,
         "owned_items": [
@@ -392,14 +392,48 @@ def purchases_in_category(profile: dict[str, Any], category: str) -> list[dict[s
     return out
 
 
+CONSUMABLE_CATEGORIES = {
+    "water", "food", "grocery", "groceries", "cosmetics", "medicine", "medical",
+    "supplement", "supplements", "household_consumable", "consumable",
+}
+
+
 def owned_in_category(profile: dict[str, Any], category: str) -> list[dict[str, Any]]:
+    """직접 등록한 보유품과 구매 이력으로 추정되는 비소모품을 함께 반환한다.
+
+    구매 사실만으로 현재 보유를 확정할 수는 없으므로 source를 표시한다. 소모품은
+    구매 후 사용됐을 가능성이 높아 자동 보유품으로 만들지 않는다.
+    """
     cat = (category or "").strip().lower()
     if not cat:
         return []
-    return [
-        i for i in profile.get("owned_items", [])
+    registered = [
+        {**i, "source": "registered", "ownership_inferred": False}
+        for i in profile.get("owned_items", [])
         if i["category"].lower() == cat or i["category"].lower() in cat or cat in i["category"].lower()
     ]
+    if any(consumable == cat or consumable in cat for consumable in CONSUMABLE_CATEGORIES):
+        return registered
+
+    registered_names = {(item.get("name") or "").strip().lower() for item in registered}
+    inferred_by_name: dict[str, dict[str, Any]] = {}
+    for purchase in purchases_in_category(profile, cat):
+        name = (purchase.get("name") or "").strip()
+        key = name.lower()
+        if not key or key in registered_names:
+            continue
+        if key not in inferred_by_name:
+            inferred_by_name[key] = {
+                "category": purchase.get("category") or cat,
+                "name": name,
+                "count": 0,
+                "last_used_days_ago": None,
+                "source": "purchase_history",
+                "ownership_inferred": True,
+            }
+        inferred_by_name[key]["count"] += 1
+
+    return registered + list(inferred_by_name.values())
 
 
 # --------------------------------------------------------------------------

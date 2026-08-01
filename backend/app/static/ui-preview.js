@@ -86,13 +86,11 @@
         <div class="agent24-batch-feedback-list">
           <article class="agent24-batch-feedback-card">
             <div class="agent24-feedback-card-head"><strong>Skyworth FHD FAST IPS 180Hz 게이밍 모니터</strong><span class="agent24-verdict-badge">강력 보류</span></div>
-            <p>현재 보유 제품의 고장 여부가 확인되지 않았고, 이번 달 여유금액보다 구매 부담이 커요.</p>
-            <details><summary>판단 근거 3개</summary><ul><li>이번 달 자유 예산 초과</li><li>가격·희소성 주장 검증 실패</li><li>구체적인 사용 시점 제시</li></ul></details>
+            <p>현재 제품이 고장 나 교체 필요성은 확인됐지만, 이번 달 여유금액보다 구매 부담이 커요.</p>
           </article>
           <article class="agent24-batch-feedback-card">
             <div class="agent24-feedback-card-head"><strong>녹스 게이밍 헤드셋 NX-502</strong><span class="agent24-verdict-badge">강력 보류</span></div>
             <p>최근 동일 모델 구매 기록이 있어 현재 보유·사용 여부를 먼저 확인하는 편이 좋아요.</p>
-            <details><summary>판단 근거 2개</summary><ul><li>최근 30일 내 유사 구매</li><li>예정 지출 반영 후 잔액 부족</li></ul></details>
           </article>
         </div>
         <div class="agent24-actions"><button type="button" class="agent24-button agent24-button-primary">추천대로 멈추기</button><button type="button" class="agent24-button agent24-button-secondary">그래도 모두 구매</button></div>
