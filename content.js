@@ -137,7 +137,37 @@
     wizard = null;
   }
 
+  // ---- Cross-page-navigation bypass -------------------------------------------------
+  // The WeakSet-based allowedControls/allowedForms mechanism only survives within a
+  // single page's JS context — it lets the replayed click through immediately, but a
+  // real checkout flow often continues onto a NEW page (e.g. Coupang's order-sheet
+  // page) with its OWN "결제하기" button, which is a completely fresh DOM/JS context
+  // where that WeakSet is empty again. Without this, the wizard re-triggers on every
+  // page of the same checkout flow. sessionStorage survives navigation within the same
+  // tab, so a short time-boxed bypass here covers "the rest of this same checkout."
+
+  const BYPASS_KEY = "agent24_bypass_until";
+  const BYPASS_WINDOW_MS = 5 * 60 * 1000;
+
+  function armBypass() {
+    try {
+      sessionStorage.setItem(BYPASS_KEY, String(Date.now() + BYPASS_WINDOW_MS));
+    } catch {
+      // best-effort; if storage is unavailable, the wizard may re-trigger on the
+      // next page, which is a degraded-but-safe fallback, not a hard failure.
+    }
+  }
+
+  function isBypassActive() {
+    try {
+      return Date.now() < Number(sessionStorage.getItem(BYPASS_KEY) || 0);
+    } catch {
+      return false;
+    }
+  }
+
   function proceedWithOriginal() {
+    armBypass();
     resumeAction?.();
     closeDialog();
   }
@@ -658,6 +688,10 @@
   // ---- Interception (unchanged) -------------------------------------------------
 
   function interceptClick(event) {
+    if (isBypassActive()) {
+      return;
+    }
+
     const control = getInteractiveControl(event.target);
     if (!control) {
       return;
@@ -683,6 +717,10 @@
   }
 
   function interceptSubmit(event) {
+    if (isBypassActive()) {
+      return;
+    }
+
     const form = event.target;
     if (!(form instanceof HTMLFormElement)) {
       return;

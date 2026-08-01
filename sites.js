@@ -24,15 +24,15 @@
         /\/checkout(?:\/|$)/i,
         /\/payment(?:\/|$)/i,
       ],
-      // Coupang gets its own word list (rather than the shared
-      // KOREAN_PAYMENT_WORDS constant) to add "바로구매" — verified against a
-      // real product page (2026-08-01): the button's text is exactly
-      // "바로구매", inside a span.prod-buy-btn__txt. "구매하기"/"주문하기" are
-      // deliberately NOT added here (matches the existing design: those are
-      // pre-checkout navigation wording and only count once already on a
-      // checkoutPath, via checkoutPaymentWords below — see
+      // Deliberately the shared KOREAN_PAYMENT_WORDS (NOT extended with
+      // "바로구매") — "바로구매" on the product page is intentionally let
+      // through untouched. The wizard should trigger exactly once, on the
+      // order-sheet page's final "결제하기" button, not on the product
+      // page too (that caused the wizard to show twice for the same
+      // checkout). "구매하기"/"주문하기" stay excluded for the same reason
+      // as before (pre-checkout navigation wording — see
       // tests/sites.test.js "allows checkout navigation wording...").
-      paymentWords: /(결제하기|결제\s*및\s*주문|주문\s*및\s*결제|주문\s*확정|바로구매)/,
+      paymentWords: KOREAN_PAYMENT_WORDS,
       checkoutPaymentWords: KOREAN_ORDER_WORDS,
       paymentSelectors: [],
       // Verified against a real coupang product page (2026-08-01):
