@@ -871,11 +871,38 @@ html.agent24-dialog-open {
   font-size: 9px;
   font-weight: 620;
 }
-#agent24-purchase-guard .agent24-batch-feedback-card > p {
-  margin: 10px 0 0;
+#agent24-purchase-guard .agent24-feedback-summary {
+  margin-top: 10px;
+}
+#agent24-purchase-guard .agent24-feedback-summary p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
   color: rgba(52, 71, 80, 0.64);
   font-size: 11px;
   line-height: 1.55;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+#agent24-purchase-guard .agent24-feedback-summary.is-expanded p {
+  display: block;
+  overflow: visible;
+}
+#agent24-purchase-guard .agent24-feedback-summary button {
+  margin-top: 6px;
+  padding: 0;
+  color: rgba(73, 88, 118, 0.62);
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+#agent24-purchase-guard .agent24-feedback-summary button:hover {
+  color: rgba(57, 72, 103, 0.9);
+}
+#agent24-purchase-guard .agent24-feedback-summary button[hidden] {
+  display: none;
 }
 #agent24-purchase-guard .agent24-batch-feedback-card details {
   margin-top: 9px;
