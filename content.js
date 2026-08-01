@@ -92,7 +92,7 @@
   }
 
   function lianMark() {
-    return `<svg viewBox="0 0 340 340" aria-hidden="true"><rect width="340" height="340" rx="72" fill="#fffdf8"/><circle fill="#D4D4D4" cx="170" cy="170" r="52"/><path transform="rotate(-32 138 143)" fill="#F5823A" d="M138 143L159.553 149.670L143 165Z"/></svg>`;
+    return `<svg viewBox="0 0 340 340" aria-hidden="true"><rect width="340" height="340" rx="72" fill="#fffdf8"/><circle fill="#D4D4D4" cx="170" cy="170" r="104"/><path transform="rotate(-40 107 140)" fill="#F5823A" d="M107 140L140.96 122.96L150.2 157.04Z"/></svg>`;
   }
 
   // ---- Dialog shell -------------------------------------------------
