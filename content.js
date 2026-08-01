@@ -721,10 +721,6 @@
       .map((entry) => {
         const result = entry.final;
         const verdict = result.verdict || "WARN";
-        const reasons = (result.breakdown || [])
-          .filter((item) => item.key !== "dark_pattern_detected")
-          .map((item) => `<li>${escapeAttr(item.label)}</li>`)
-          .join("");
         return `
           <article class="agent24-batch-feedback-card">
             <div>
@@ -732,7 +728,6 @@
               <strong>${escapeAttr(entry.item.name)}</strong>
             </div>
             <p>${escapeAttr(result.summary || "확인된 소비 조건을 다시 살펴보세요.")}</p>
-            ${reasons ? `<ul>${reasons}</ul>` : ""}
           </article>`;
       })
       .join("");
