@@ -372,6 +372,7 @@ async def answer(case_id: str, body: AnswerIn) -> dict[str, Any]:
         "question": case.get("question"),
         "answered": {"selected": chosen, "free_text": body.reason,
                      "want_alternatives": body.want_alternatives},
+        "follow_up_question": (findings or {}).get("follow_up_question"),
         "agent_actions": ctx.applied_actions,
         "agent_memories": ctx.memories_written,
         "budget": judge.budget_snapshot(case, profile),
