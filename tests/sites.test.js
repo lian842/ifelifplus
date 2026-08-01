@@ -3,7 +3,11 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const { findSite, matchesPath } = require("../sites.js");
+const {
+  findSite,
+  matchesPath,
+  matchesPaymentText,
+} = require("../sites.js");
 
 const manifest = JSON.parse(
   fs.readFileSync(path.join(__dirname, "..", "manifest.json"), "utf8"),
@@ -13,37 +17,31 @@ const routeCases = [
   {
     id: "coupang",
     hostname: "www.coupang.com",
-    trigger: "https://www.coupang.com/cartView.pang",
     checkout: "https://order.coupang.com/order/orderSheet.pang?item=1",
   },
   {
     id: "musinsa",
     hostname: "www.musinsa.com",
-    trigger: "https://www.musinsa.com/order/cart",
     checkout: "https://www.musinsa.com/order/order_form",
   },
   {
     id: "29cm",
     hostname: "www.29cm.co.kr",
-    trigger: "https://www.29cm.co.kr/order/cart",
     checkout: "https://www.29cm.co.kr/order/checkout",
   },
   {
     id: "amazon",
     hostname: "www.amazon.com",
-    trigger: "https://www.amazon.com/gp/cart/view.html",
     checkout: "https://www.amazon.com/gp/buy/spc/handlers/display.html",
   },
   {
     id: "kream",
     hostname: "kream.co.kr",
-    trigger: "https://kream.co.kr/products/547008",
     checkout: "https://kream.co.kr/buy/547008",
   },
   {
     id: "coupangeats",
     hostname: "web.coupangeats.com",
-    trigger: "https://web.coupangeats.com/cart",
     checkout: "https://web.coupangeats.com/checkout",
   },
   {
@@ -54,7 +52,6 @@ const routeCases = [
   {
     id: "yogiyo",
     hostname: "www.yogiyo.co.kr",
-    trigger: "https://www.yogiyo.co.kr/mobile/#/cart/",
     checkout: "https://www.yogiyo.co.kr/mobile/#/checkout/",
   },
 ];
@@ -72,6 +69,8 @@ test("finds every supported shopping and delivery service", () => {
 test("loads the site config before the purchase guard on every host", () => {
   const contentScript = manifest.content_scripts[0];
 
+  assert.equal(manifest.version, "0.4.0");
+  assert.equal(manifest.permissions, undefined);
   assert.deepEqual(contentScript.js, ["sites.js", "content.js"]);
   assert.deepEqual(contentScript.matches, [
     "https://*.coupang.com/*",
@@ -85,16 +84,6 @@ test("loads the site config before the purchase guard on every host", () => {
     "https://www.yogiyo.co.kr/*",
     "https://yogiyo.co.kr/*",
   ]);
-});
-
-test("matches cart or purchase trigger routes", () => {
-  for (const routeCase of routeCases) {
-    if (!routeCase.trigger) {
-      continue;
-    }
-    const site = findSite(routeCase.hostname);
-    assert.equal(matchesPath(site.triggerPaths, routeCase.trigger), true);
-  }
 });
 
 test("matches checkout routes", () => {
@@ -129,20 +118,53 @@ test("does not confuse browsing or history routes with checkout", () => {
   }
 });
 
-test("matches each site's checkout button wording", () => {
-  assert.equal(findSite("www.coupang.com").checkoutWords.test("구매하기"), true);
-  assert.equal(findSite("www.musinsa.com").checkoutWords.test("주문하기"), true);
-  assert.equal(findSite("www.29cm.co.kr").checkoutWords.test("결제하기"), true);
+test("matches each site's final payment wording", () => {
+  assert.equal(findSite("www.coupang.com").paymentWords.test("32,000원 결제하기"), true);
+  assert.equal(findSite("www.musinsa.com").paymentWords.test("결제하기"), true);
+  assert.equal(findSite("www.29cm.co.kr").paymentWords.test("주문 및 결제"), true);
   assert.equal(
-    findSite("www.amazon.com").checkoutWords.test("Proceed to checkout"),
+    findSite("www.amazon.com").paymentWords.test("Place your order"),
     true,
   );
-  assert.equal(findSite("kream.co.kr").checkoutWords.test("즉시 구매"), true);
-  assert.equal(findSite("kream.co.kr").checkoutWords.test("구매 입찰"), true);
+  assert.equal(findSite("kream.co.kr").paymentWords.test("결제하기"), true);
   assert.equal(
-    findSite("web.coupangeats.com").checkoutWords.test("배달 주문하기"),
+    findSite("web.coupangeats.com").paymentWords.test("결제하기"),
     true,
   );
-  assert.equal(findSite("order.baemin.com").checkoutWords.test("결제하기"), true);
-  assert.equal(findSite("www.yogiyo.co.kr").checkoutWords.test("주문하기"), true);
+  assert.equal(findSite("order.baemin.com").paymentWords.test("25,000원 결제하기"), true);
+  assert.equal(findSite("www.yogiyo.co.kr").paymentWords.test("결제하기"), true);
+});
+
+test("allows checkout navigation wording before the payment screen", () => {
+  const coupang = findSite("www.coupang.com");
+  const amazon = findSite("www.amazon.com");
+  const kream = findSite("kream.co.kr");
+
+  assert.equal(coupang.paymentWords.test("구매하기"), false);
+  assert.equal(coupang.paymentWords.test("주문하기"), false);
+  assert.equal(amazon.paymentWords.test("Proceed to checkout"), false);
+  assert.equal(kream.paymentWords.test("즉시 구매"), false);
+  assert.equal(kream.paymentWords.test("구매 입찰"), false);
+  assert.equal(kream.paymentWords.test("구매확정"), false);
+});
+
+test("treats ambiguous order buttons as payment only on checkout routes", () => {
+  const yogiyo = findSite("www.yogiyo.co.kr");
+
+  assert.equal(
+    matchesPaymentText(
+      yogiyo,
+      "주문하기",
+      "https://www.yogiyo.co.kr/mobile/#/cart/",
+    ),
+    false,
+  );
+  assert.equal(
+    matchesPaymentText(
+      yogiyo,
+      "주문하기",
+      "https://www.yogiyo.co.kr/mobile/#/checkout/",
+    ),
+    true,
+  );
 });

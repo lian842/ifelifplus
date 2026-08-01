@@ -8,34 +8,30 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, () => {
   "use strict";
 
+  const KOREAN_PAYMENT_WORDS =
+    /(결제하기|결제\s*및\s*주문|주문\s*및\s*결제|주문\s*확정)/;
+  const KOREAN_ORDER_WORDS =
+    /(배달\s*주문하기|포장\s*주문하기|주문하기|주문\s*확인)/;
+
   const sites = [
     {
       id: "coupang",
       name: "쿠팡",
       hostname: /(^|\.)coupang\.com$/i,
-      triggerPaths: [/\/cartView\.pang$/i, /\/cart(?:\/|$)/i],
       checkoutPaths: [
         /\/order\/orderSheet\.pang$/i,
         /\/order\/checkout(?:\/|$)/i,
         /\/checkout(?:\/|$)/i,
         /\/payment(?:\/|$)/i,
       ],
-      checkoutWords: /(구매하기|주문하기|결제하기)/,
-      checkoutSelectors: [],
-      returnUrl: "https://www.coupang.com/cartView.pang",
-      cancelLabel: "장바구니로 돌아가기",
-      description:
-        "지금 결제 화면으로 이동하려고 해요. 장바구니로 돌아가거나 확인 후 계속 진행할 수 있어요.",
+      paymentWords: KOREAN_PAYMENT_WORDS,
+      checkoutPaymentWords: KOREAN_ORDER_WORDS,
+      paymentSelectors: [],
     },
     {
       id: "musinsa",
       name: "무신사",
       hostname: /(^|\.)musinsa\.com$/i,
-      triggerPaths: [
-        /\/order\/cart\/?$/i,
-        /\/app\/cart\/?$/i,
-        /\/cart\/?$/i,
-      ],
       checkoutPaths: [
         /\/order\/order_form\/?$/i,
         /\/order\/order-form\/?$/i,
@@ -43,65 +39,51 @@
         /\/checkout(?:\/|$)/i,
         /\/payment(?:\/|$)/i,
       ],
-      checkoutWords: /(구매하기|주문하기|결제하기)/,
-      checkoutSelectors: [],
-      returnUrl: "https://www.musinsa.com/order/cart",
-      cancelLabel: "장바구니로 돌아가기",
-      description:
-        "지금 주문서로 이동하려고 해요. 장바구니로 돌아가거나 확인 후 계속 진행할 수 있어요.",
+      paymentWords: KOREAN_PAYMENT_WORDS,
+      checkoutPaymentWords: KOREAN_ORDER_WORDS,
+      paymentSelectors: [],
     },
     {
       id: "29cm",
       name: "29CM",
       hostname: /(^|\.)29cm\.co\.kr$/i,
-      triggerPaths: [/\/order\/cart\/?$/i, /\/cart\/?$/i],
       checkoutPaths: [
         /\/order\/?$/i,
         /\/order\/(?:checkout|order-form|order_form|form|payment)(?:\/|$)/i,
         /\/checkout(?:\/|$)/i,
         /\/payment(?:\/|$)/i,
       ],
-      checkoutWords: /(구매하기|주문하기|결제하기)/,
-      checkoutSelectors: [],
-      returnUrl: "https://www.29cm.co.kr/order/cart",
-      cancelLabel: "장바구니로 돌아가기",
-      description:
-        "지금 주문서로 이동하려고 해요. 장바구니로 돌아가거나 확인 후 계속 진행할 수 있어요.",
+      paymentWords: KOREAN_PAYMENT_WORDS,
+      checkoutPaymentWords: KOREAN_ORDER_WORDS,
+      paymentSelectors: [],
     },
     {
       id: "amazon",
       name: "Amazon",
       hostname: /(^|\.)amazon\.com$/i,
-      triggerPaths: [
-        /\/gp\/cart\/view\.html$/i,
-        /\/gp\/aw\/c(?:\/|$)/i,
-        /\/cart(?:\/|$)/i,
-      ],
       checkoutPaths: [
         /\/checkout(?:\/|$)/i,
         /\/hz\/checkout(?:\/|$)/i,
         /\/gp\/buy(?:\/|$)/i,
         /\/buy\/checkout(?:\/|$)/i,
       ],
-      checkoutWords:
-        /(proceed\s+to\s+checkout|go\s+to\s+checkout|checkout|place\s+your\s+order)/i,
-      checkoutSelectors: [
-        "#sc-buy-box-ptc-button input",
-        "#sc-buy-box-ptc-button button",
-        "input[name='proceedToRetailCheckout']",
-        "input[name='proceedToCheckout']",
-        "[data-feature-id='proceed-to-checkout-action']",
+      paymentWords: /(place\s+(?:your\s+)?order|submit\s+order)/i,
+      paymentSelectors: [
+        "#placeYourOrder",
+        "#placeYourOrder input",
+        "#placeYourOrder button",
+        "#submitOrderButtonId",
+        "#submitOrderButtonId input",
+        "#submitOrderButtonId button",
+        "input[name='placeYourOrder']",
+        "input[name='placeYourOrder1']",
+        "[data-testid='place-your-order-action']",
       ],
-      returnUrl: "https://www.amazon.com/gp/cart/view.html",
-      cancelLabel: "장바구니로 돌아가기",
-      description:
-        "지금 Amazon 결제 화면으로 이동하려고 해요. 장바구니로 돌아가거나 확인 후 계속 진행할 수 있어요.",
     },
     {
       id: "kream",
       name: "KREAM",
       hostname: /(^|\.)kream\.co\.kr$/i,
-      triggerPaths: [/\/products\/\d+(?:\/|$)/i],
       checkoutPaths: [
         /\/buy(?:\/|$)/i,
         /\/purchase(?:\/|$)/i,
@@ -109,66 +91,44 @@
         /\/checkout(?:\/|$)/i,
         /\/payment(?:\/|$)/i,
       ],
-      checkoutWords: /(즉시\s*구매(?:하기)?|구매\s*입찰|결제하기)/,
-      checkoutSelectors: [],
-      controlAnywhere: true,
-      returnUrl: "https://kream.co.kr/",
-      cancelLabel: "상품으로 돌아가기",
-      description:
-        "지금 구매 절차를 계속하려고 해요. 상품으로 돌아가거나 확인 후 계속 진행할 수 있어요.",
+      paymentWords: KOREAN_PAYMENT_WORDS,
+      checkoutPaymentWords: /(구매하기|주문하기)/,
+      paymentSelectors: [],
     },
     {
       id: "coupangeats",
       name: "쿠팡이츠",
       hostname: /^web\.coupangeats\.com$/i,
-      triggerPaths: [
-        /\/cart(?:\/|$)/i,
-        /\/basket(?:\/|$)/i,
-        /\/order(?:\/|$)/i,
-      ],
       checkoutPaths: [
         /\/checkout(?:\/|$)/i,
         /\/order\/(?:confirm|checkout|payment)(?:\/|$)/i,
         /\/payment(?:\/|$)/i,
       ],
-      checkoutWords:
-        /(배달\s*주문하기|포장\s*주문하기|주문하기|결제하기|주문\s*확인)/,
-      checkoutSelectors: [],
-      controlAnywhere: true,
-      returnUrl: "https://web.coupangeats.com/",
-      cancelLabel: "메뉴로 돌아가기",
-      description:
-        "지금 음식 주문을 계속하려고 해요. 메뉴로 돌아가거나 확인 후 계속 진행할 수 있어요.",
+      paymentWords: KOREAN_PAYMENT_WORDS,
+      checkoutPaymentWords: KOREAN_ORDER_WORDS,
+      paymentSelectors: [],
     },
     {
       id: "baemin",
       name: "배달의민족",
       hostname: /^order(?:-next)?\.baemin\.com$/i,
-      triggerPaths: [],
       checkoutPaths: [/^\/$/i, /^\/quick\/?$/i, /^\/family\/?$/i],
-      checkoutWords: /(주문하기|결제하기|주문\s*확인)/,
-      checkoutSelectors: [],
-      returnUrl: "https://www.baemin.com/",
-      cancelLabel: "메뉴로 돌아가기",
-      description:
-        "지금 배달 주문서로 이동하려고 해요. 메뉴로 돌아가거나 확인 후 계속 진행할 수 있어요.",
+      paymentWords: KOREAN_PAYMENT_WORDS,
+      checkoutPaymentWords: KOREAN_ORDER_WORDS,
+      paymentSelectors: [],
     },
     {
       id: "yogiyo",
       name: "요기요",
       hostname: /^(www\.)?yogiyo\.co\.kr$/i,
-      triggerPaths: [/\/cart\/?$/i],
       checkoutPaths: [
         /\/checkout\/?$/i,
         /\/order\/(?:checkout|payment)(?:\/|$)/i,
         /\/payment(?:\/|$)/i,
       ],
-      checkoutWords: /(배달\s*주문하기|포장\s*주문하기|주문하기|결제하기)/,
-      checkoutSelectors: [],
-      returnUrl: "https://www.yogiyo.co.kr/mobile/",
-      cancelLabel: "메뉴로 돌아가기",
-      description:
-        "지금 요기요 결제 화면으로 이동하려고 해요. 메뉴로 돌아가거나 확인 후 계속 진행할 수 있어요.",
+      paymentWords: KOREAN_PAYMENT_WORDS,
+      checkoutPaymentWords: KOREAN_ORDER_WORDS,
+      paymentSelectors: [],
     },
   ];
 
@@ -194,5 +154,17 @@
     }
   }
 
-  return { findSite, matchesPath, sites };
+  function matchesPaymentText(site, text, url, baseUrl) {
+    if (site.paymentWords.test(text)) {
+      return true;
+    }
+
+    return Boolean(
+      site.checkoutPaymentWords &&
+        matchesPath(site.checkoutPaths, url, baseUrl) &&
+        site.checkoutPaymentWords.test(text),
+    );
+  }
+
+  return { findSite, matchesPath, matchesPaymentText, sites };
 });

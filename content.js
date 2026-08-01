@@ -2,36 +2,19 @@
   "use strict";
 
   const ROOT_ID = "agent24-purchase-guard";
-  const { findSite, matchesPath } = globalThis.Agent24Sites;
+  const { findSite, matchesPaymentText } = globalThis.Agent24Sites;
   const currentSite = findSite(location.hostname);
 
   if (!currentSite) {
     return;
   }
 
-  const BYPASS_KEY = `agent24CheckoutBypassUntil:${currentSite.id}`;
-
   const allowedControls = new WeakSet();
   const allowedForms = new WeakSet();
 
   let dialogElements = null;
   let resumeAction = null;
-  let cancelAction = null;
   let previouslyFocused = null;
-  let lastObservedUrl = location.href;
-  let routeCheckInProgress = false;
-
-  function matchesCurrentPath(patterns, url = location.href) {
-    return matchesPath(patterns, url, location.href);
-  }
-
-  function isTriggerPage() {
-    return matchesCurrentPath(currentSite.triggerPaths);
-  }
-
-  function isCheckoutPage() {
-    return matchesCurrentPath(currentSite.checkoutPaths);
-  }
 
   function getControlText(control) {
     return [
@@ -57,31 +40,27 @@
     );
   }
 
-  function isCheckoutControl(control) {
+  function isPaymentControl(control) {
     if (!control || control.closest(`#${ROOT_ID}`)) {
       return false;
     }
 
-    const matchesSelector = currentSite.checkoutSelectors.some((selector) =>
+    const text = getControlText(control);
+    const matchesSelector = currentSite.paymentSelectors.some((selector) =>
       control.matches(selector),
     );
-    const href = control.getAttribute("href");
-    const linksToCheckout =
-      href && matchesCurrentPath(currentSite.checkoutPaths, href);
-
-    return (
-      matchesSelector ||
-      linksToCheckout ||
-      currentSite.checkoutWords.test(getControlText(control))
+    const matchesPaymentWording = matchesPaymentText(
+      currentSite,
+      text,
+      location.href,
+      location.href,
     );
+
+    return matchesSelector || matchesPaymentWording;
   }
 
-  function formLooksLikeCheckout(form, submitter) {
-    const action = form.getAttribute("action") || "";
-    return (
-      matchesCurrentPath(currentSite.checkoutPaths, action) ||
-      isCheckoutControl(submitter)
-    );
+  function formLooksLikePayment(submitter) {
+    return isPaymentControl(submitter);
   }
 
   function buildDialog() {
@@ -104,13 +83,13 @@
         <div class="agent24-accent" aria-hidden="true"></div>
         <div class="agent24-content">
           <p class="agent24-label">AGENT24 · ${currentSite.name}</p>
-          <h2 id="agent24-title">잠깐, 결제하려는 게 맞나요?</h2>
+          <h2 id="agent24-title">잠깐, 정말 결제할까요?</h2>
           <p id="agent24-description">
-            ${currentSite.description}
+            지금 결제를 완료하려고 해요. 결제를 취소하거나 확인 후 계속 진행할 수 있어요.
           </p>
           <div class="agent24-actions">
             <button type="button" class="agent24-button agent24-button-primary" data-agent24-cancel>
-              ${currentSite.cancelLabel}
+              결제 취소
             </button>
             <button type="button" class="agent24-button agent24-button-secondary" data-agent24-continue>
               그래도 계속
@@ -146,56 +125,30 @@
       return;
     }
 
-    const { onContinue, onCancel } = options;
+    const { onContinue } = options;
     const dialog = buildDialog();
 
     resumeAction = onContinue || null;
-    cancelAction = onCancel || null;
     previouslyFocused = document.activeElement;
     dialog.root.hidden = false;
     document.documentElement.classList.add("agent24-dialog-open");
     requestAnimationFrame(() => dialog.primaryButton.focus());
   }
 
-  async function armCheckoutBypass() {
-    const expiresAt = Date.now() + 30_000;
-    await chrome.storage.local.set({ [BYPASS_KEY]: expiresAt });
-  }
-
-  async function consumeCheckoutBypass() {
-    const stored = await chrome.storage.local.get(BYPASS_KEY);
-    const expiresAt = Number(stored[BYPASS_KEY] || 0);
-
-    if (expiresAt > Date.now()) {
-      await chrome.storage.local.remove(BYPASS_KEY);
-      return true;
-    }
-
-    if (expiresAt) {
-      await chrome.storage.local.remove(BYPASS_KEY);
-    }
-    return false;
-  }
-
-  async function closeDialog(shouldContinue) {
+  function closeDialog(shouldContinue) {
     if (!dialogElements || dialogElements.root.hidden) {
       return;
     }
 
-    const action = shouldContinue ? resumeAction : cancelAction;
+    const action = shouldContinue ? resumeAction : null;
     dialogElements.root.hidden = true;
     document.documentElement.classList.remove("agent24-dialog-open");
     resumeAction = null;
-    cancelAction = null;
 
     if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) {
       previouslyFocused.focus();
     }
     previouslyFocused = null;
-
-    if (shouldContinue) {
-      await armCheckoutBypass();
-    }
 
     action?.();
   }
@@ -217,10 +170,6 @@
   }
 
   function interceptClick(event) {
-    if (!isTriggerPage() && !currentSite.controlAnywhere) {
-      return;
-    }
-
     const control = getInteractiveControl(event.target);
     if (!control) {
       return;
@@ -234,7 +183,7 @@
       return;
     }
 
-    if (!isCheckoutControl(control)) {
+    if (!isPaymentControl(control)) {
       return;
     }
 
@@ -244,10 +193,6 @@
   }
 
   function interceptSubmit(event) {
-    if (!isTriggerPage() && !currentSite.controlAnywhere) {
-      return;
-    }
-
     const form = event.target;
     if (!(form instanceof HTMLFormElement)) {
       return;
@@ -258,41 +203,13 @@
       return;
     }
 
-    if (!formLooksLikeCheckout(form, event.submitter)) {
+    if (!formLooksLikePayment(event.submitter)) {
       return;
     }
 
     event.preventDefault();
     event.stopImmediatePropagation();
     openDialog({ onContinue: () => replayForm(form, event.submitter) });
-  }
-
-  function returnToShopping() {
-    if (history.length > 1) {
-      history.back();
-      return;
-    }
-    location.assign(currentSite.returnUrl);
-  }
-
-  async function guardCheckoutRoute() {
-    if (!isCheckoutPage() || routeCheckInProgress) {
-      return;
-    }
-
-    routeCheckInProgress = true;
-    try {
-      if (await consumeCheckoutBypass()) {
-        return;
-      }
-
-      openDialog({
-        onContinue: () => {},
-        onCancel: returnToShopping,
-      });
-    } finally {
-      routeCheckInProgress = false;
-    }
   }
 
   function handleKeydown(event) {
@@ -323,13 +240,4 @@
   document.addEventListener("click", interceptClick, true);
   document.addEventListener("submit", interceptSubmit, true);
   document.addEventListener("keydown", handleKeydown, true);
-
-  guardCheckoutRoute();
-  window.setInterval(() => {
-    if (location.href === lastObservedUrl) {
-      return;
-    }
-    lastObservedUrl = location.href;
-    guardCheckoutRoute();
-  }, 500);
 })();
