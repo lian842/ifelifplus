@@ -110,10 +110,14 @@ test("recognizes Coupang's verified cart route and checkout control", () => {
 
 test("scrapes a selected Coupang cart row without mixing its fields", () => {
   const coupang = findSite("cart.coupang.com");
-  const priceNode = { textContent: "39,920" };
+  const priceNode = {
+    textContent: "39,920",
+    nextElementSibling: { textContent: "원" },
+  };
   const priceArea = {
-    querySelector(selector) {
-      return selector === "span.twc-font-bold" ? priceNode : null;
+    querySelectorAll(selector) {
+      assert.equal(selector, "span");
+      return [{ textContent: "24%", nextElementSibling: null }, priceNode];
     },
   };
   const quantityInput = { value: "2" };
@@ -144,6 +148,48 @@ test("scrapes a selected Coupang cart row without mixing its fields", () => {
   try {
     assert.deepEqual(coupang.scrapeCartItems(), [
       { name: "Machenike 메카닉 L9X1", price: 39920, quantity: 2 },
+    ]);
+  } finally {
+    global.document = previousDocument;
+  }
+});
+
+test("does not count duplicate responsive Coupang cart rows", () => {
+  const coupang = findSite("cart.coupang.com");
+  const priceNode = {
+    textContent: "39,920",
+    nextElementSibling: { textContent: "원" },
+  };
+  const priceArea = {
+    querySelectorAll() {
+      return [{ textContent: "24%", nextElementSibling: null }, priceNode];
+    },
+  };
+  const row = () => ({
+    querySelector(selector) {
+      if (selector === '[data-component-id="price-area"]') return priceArea;
+      if (selector === ".cart-quantity-input") return { value: "1" };
+      if (selector === 'a[href*="/vp/products/"]') {
+        return { getAttribute: () => "/vp/products/123?vendorItemId=456" };
+      }
+      return null;
+    },
+    querySelectorAll() {
+      return [priceArea];
+    },
+  });
+  const checkbox = () => ({
+    parentElement: row(),
+    getAttribute() {
+      return "중복 렌더링 상품";
+    },
+  });
+  const previousDocument = global.document;
+  global.document = { querySelectorAll: () => [checkbox(), checkbox()] };
+
+  try {
+    assert.deepEqual(coupang.scrapeCartItems(), [
+      { name: "중복 렌더링 상품", price: 39920, quantity: 1 },
     ]);
   } finally {
     global.document = previousDocument;

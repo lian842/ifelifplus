@@ -151,6 +151,18 @@ html.agent24-dialog-open {
   margin-top: 16px;
 }
 
+#agent24-purchase-guard .agent24-cart-item {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #d9e0e6;
+  border-radius: 6px;
+  background: #f8fafb;
+}
+
+#agent24-purchase-guard .agent24-cart-item .agent24-field:first-child {
+  margin-top: 0;
+}
+
 #agent24-purchase-guard .agent24-field input,
 #agent24-purchase-guard .agent24-field textarea {
   display: block;

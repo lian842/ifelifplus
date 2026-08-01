@@ -62,6 +62,8 @@
       // that product's price and quantity, so names and prices never get
       // paired by their unrelated page-wide order.
       scrapeCartItems() {
+        const seenRows = new Set();
+        const seenProducts = new Set();
         return Array.from(
           document.querySelectorAll('input[type="checkbox"][title]:checked'),
         ).flatMap((checkbox) => {
@@ -80,14 +82,37 @@
             levels += 1;
           }
           if (!row || levels >= 6) return [];
+          if (seenRows.has(row)) return [];
+          seenRows.add(row);
 
           const priceArea = row.querySelector('[data-component-id="price-area"]');
-          const priceNode = priceArea.querySelector("span.twc-font-bold");
-          const price = Number((priceNode?.textContent || "").replace(/[^\d]/g, ""));
+          const priceSpans = Array.from(priceArea.querySelectorAll("span"));
+          const splitPriceNode = priceSpans.find((span) => {
+            const value = span.textContent?.trim() || "";
+            const unit = span.nextElementSibling?.textContent?.trim() || "";
+            return /^[\d,]+$/.test(value) && unit === "원";
+          });
+          const combinedPriceNode = priceSpans.find((span) => {
+            const value = span.textContent?.trim() || "";
+            return (
+              /^[\d,]+\s*원$/.test(value) &&
+              !span.classList?.contains("twc-line-through") &&
+              !span.closest?.(".twc-line-through")
+            );
+          });
+          const priceText =
+            splitPriceNode?.textContent || combinedPriceNode?.textContent || "";
+          const price = Number(priceText.replace(/[^\d]/g, ""));
           const quantity = Number(row.querySelector(".cart-quantity-input")?.value) || 1;
           const name = checkbox.getAttribute("title")?.trim();
+          const productHref = row
+            .querySelector('a[href*="/vp/products/"]')
+            ?.getAttribute("href");
+          const productKey = `${productHref || name}|${price}|${quantity}`;
 
-          return name && price > 0 ? [{ name, price, quantity }] : [];
+          if (!name || price <= 0 || seenProducts.has(productKey)) return [];
+          seenProducts.add(productKey);
+          return [{ name, price, quantity }];
         });
       },
     },
