@@ -5,6 +5,9 @@
   "description": "지원 쇼핑몰과 배달 서비스의 최종 결제 버튼을 누를 때 한 번 더 확인합니다.",
   "permissions": ["storage"],
   "host_permissions": ["http://localhost:8000/*", "http://localhost:8787/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": [
@@ -19,8 +22,8 @@
         "https://www.yogiyo.co.kr/*",
         "https://yogiyo.co.kr/*"
       ],
-      "js": ["sites.js", "content.js"],
-      "css": ["styles.css"],
+      "js": ["sites.js", "content.js", "tips.js"],
+      "css": ["styles.css", "tips.css"],
       "run_at": "document_start"
     }
   ]

@@ -71,7 +71,8 @@ test("loads the site config before the purchase guard on every host", () => {
 
   assert.equal(manifest.version, "0.4.0");
   assert.deepEqual(manifest.permissions, ["storage"]);
-  assert.deepEqual(contentScript.js, ["sites.js", "content.js"]);
+  assert.deepEqual(contentScript.js, ["sites.js", "content.js", "tips.js"]);
+  assert.deepEqual(contentScript.css, ["styles.css", "tips.css"]);
   assert.deepEqual(contentScript.matches, [
     "https://*.coupang.com/*",
     "https://*.musinsa.com/*",
