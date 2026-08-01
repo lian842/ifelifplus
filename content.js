@@ -520,25 +520,26 @@
             <div class="agent24-purchase-group" aria-hidden="true">${ticker}</div>
           </div>
         </div>
-        ${
-          items.length > 1
-            ? `<button type="button" class="agent24-main-action" id="agent24-start-case">전체 상품 확인하기 <span>→</span></button>`
-            : `<div class="agent24-prompt">
-                <textarea id="agent24-initial-reason" rows="1" maxlength="220" aria-label="구매 이유" placeholder="왜 이 상품을 사고 싶나요?"></textarea>
-                <button type="button" id="agent24-start-case" aria-label="계속" disabled><span>→</span></button>
-              </div>`
-        }
+        <div class="agent24-prompt">
+          <textarea id="agent24-initial-reason" rows="1" maxlength="220" aria-label="구매 이유" placeholder="왜 이 상품을 사고 싶나요?"></textarea>
+          <button type="button" id="agent24-start-case" aria-label="계속" disabled><span>→</span></button>
+        </div>
         <button type="button" class="agent24-quiet-action" id="agent24-context-continue">그냥 구매할게요</button>
       </div>`;
 
     const reason = document.getElementById("agent24-initial-reason");
     const start = document.getElementById("agent24-start-case");
-    reason?.addEventListener("input", () => {
+    reason.addEventListener("input", () => {
       start.disabled = reason.value.trim().length === 0;
     });
+    reason.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+      event.preventDefault();
+      if (!start.disabled) start.click();
+    });
     start.onclick = () => {
-      initialReason = reason?.value.trim() || "";
-      if (items.length > 1 || initialReason) beginCaseQueue(items);
+      initialReason = reason.value.trim();
+      if (initialReason) beginCaseQueue(items);
     };
     document.getElementById("agent24-context-continue").onclick = () => proceedWithOriginal();
     focusFirst();
@@ -954,6 +955,11 @@
     }
     checkboxes.forEach((cb) => cb.addEventListener("change", refreshEnabled));
     textarea?.addEventListener("input", refreshEnabled);
+    textarea?.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+      event.preventDefault();
+      if (!continueBtn.disabled) continueBtn.click();
+    });
     refreshEnabled();
 
     document.getElementById("agent24-question-cancel").onclick = () => closeDialog();
