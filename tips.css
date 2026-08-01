@@ -1,0 +1,58 @@
+#agent24-purchase-guard .agent24-tip-card[data-agent24-financial-tips] {
+  width: min(440px, 100%);
+  min-height: 126px;
+  margin-top: 24px;
+  padding: 16px 18px 15px;
+  overflow: hidden;
+  border: 1px solid rgba(168, 180, 217, .42);
+  border-radius: 8px;
+  background: rgba(248, 249, 255, .78);
+  box-shadow: 0 12px 26px rgba(104, 117, 154, .08), inset 0 1px 0 rgba(255, 255, 255, .8);
+  text-align: left;
+}
+
+#agent24-purchase-guard .agent24-tip-card[data-agent24-financial-tips] > .agent24-tip-slide {
+  display: block;
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 220ms ease, transform 340ms cubic-bezier(.22, .75, .24, 1);
+  will-change: opacity, transform;
+}
+
+#agent24-purchase-guard .agent24-tip-slide.is-leaving {
+  opacity: 0;
+  transform: translateX(-34px);
+}
+
+#agent24-purchase-guard .agent24-tip-slide.is-entering {
+  opacity: 0;
+  transform: translateX(34px);
+  transition: none;
+}
+
+#agent24-purchase-guard .agent24-tip-meta {
+  display: flex;
+  justify-content: space-between;
+}
+
+#agent24-purchase-guard .agent24-tip-card[data-agent24-financial-tips] em {
+  color: #7888b7;
+  font-weight: 620;
+}
+
+#agent24-purchase-guard .agent24-tip-card[data-agent24-financial-tips] h2 {
+  margin: 10px 0 5px;
+}
+
+#agent24-purchase-guard .agent24-tip-card[data-agent24-financial-tips] small {
+  display: block;
+  margin-top: 10px;
+  color: rgba(78, 95, 126, .52);
+  font-size: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #agent24-purchase-guard .agent24-tip-card[data-agent24-financial-tips] > .agent24-tip-slide {
+    transition: none;
+  }
+}

@@ -149,6 +149,53 @@ DEFAULT_PROFILE = "B"
 
 
 # --------------------------------------------------------------------------
+# 로딩 중 표시할 청년 금융 팁
+#
+# 날짜가 바뀌는 모집 일정은 DB에 고정하지 않는다. 대신 실제 신청을 준비할 때
+# 확인해야 할 공식 채널과 점검 포인트를 기록해, 오래된 안내를 사실처럼 보여주지 않는다.
+# --------------------------------------------------------------------------
+
+TIP_SEEDS: tuple[tuple[str, int, int, str, str, str, str, str], ...] = (
+    (
+        "housing-subscription-alerts", 20, 29, "청약",
+        "청약 공고는 관심 지역별 알림으로 묶어두세요.",
+        "공급 공고와 자격 기준은 수시로 달라져요. 관심 지역을 정해 청약홈 알림을 켜두면 준비할 시간을 확보할 수 있어요.",
+        "청약홈", "https://www.applyhome.co.kr/",
+    ),
+    (
+        "youth-finance-announcements", 20, 29, "청년 금융",
+        "청년 금융상품은 모집 공고를 먼저 확인해보세요.",
+        "청년도약계좌나 청년내일저축계좌처럼 조건과 신청 기간이 있는 상품은 공식 공고 알림을 받아두는 편이 좋아요.",
+        "서민금융진흥원 · 복지로", "https://www.kinfa.or.kr/",
+    ),
+    (
+        "youth-housing-support", 20, 29, "주거",
+        "월세·주거 지원은 거주 지역 공고를 함께 살펴보세요.",
+        "청년 월세와 임대주택 지원은 지역과 소득 조건에 따라 달라져요. 마이홈과 지자체 청년 포털을 함께 확인해보세요.",
+        "마이홈포털", "https://www.myhome.go.kr/",
+    ),
+    (
+        "savings-rate-check", 20, 29, "저축",
+        "자동이체일은 월급 다음 날로 맞춰보세요.",
+        "남은 돈을 저축하기보다 먼저 저축할 금액을 빼두면, 이번 달에 실제로 쓸 수 있는 예산이 더 선명해져요.",
+        "개인 예산 점검", "",
+    ),
+    (
+        "credit-card-review", 20, 29, "신용 관리",
+        "카드 혜택은 전월 실적까지 같이 계산해보세요.",
+        "할인 금액만 보기보다 혜택을 받기 위해 추가로 쓰는 금액이 없는지 확인하면 불필요한 지출을 줄일 수 있어요.",
+        "금융감독원 파인", "https://fine.fss.or.kr/",
+    ),
+    (
+        "employment-training", 20, 29, "커리어",
+        "교육비를 결제하기 전, 지원 제도를 먼저 확인해보세요.",
+        "직무 교육이나 자격증 과정은 국민내일배움카드 등 지원 대상인지 먼저 확인하면 같은 계획의 부담을 낮출 수 있어요.",
+        "고용24", "https://www.work24.go.kr/",
+    ),
+)
+
+
+# --------------------------------------------------------------------------
 # 스키마
 # --------------------------------------------------------------------------
 
@@ -186,6 +233,18 @@ CREATE TABLE IF NOT EXISTS memory_observations (
     confidence   TEXT NOT NULL,
     source       TEXT NOT NULL DEFAULT 'agent'
 );
+
+CREATE TABLE IF NOT EXISTS tips (
+    tip_id        TEXT PRIMARY KEY,
+    min_age       INTEGER NOT NULL,
+    max_age       INTEGER NOT NULL,
+    category      TEXT NOT NULL,
+    title         TEXT NOT NULL,
+    body          TEXT NOT NULL,
+    source_label  TEXT NOT NULL,
+    source_url    TEXT NOT NULL DEFAULT '',
+    active        INTEGER NOT NULL DEFAULT 1
+);
 """
 
 
@@ -203,6 +262,7 @@ def db() -> sqlite3.Connection:
     if _conn is None:
         _conn = connect()
         _conn.executescript(SCHEMA)
+        _seed_tips(_conn)
         _conn.commit()
     return _conn
 
@@ -214,6 +274,32 @@ def reset() -> None:
     conn.execute("DELETE FROM memory_observations")
     conn.execute("DELETE FROM purchases")
     conn.commit()
+
+
+def _seed_tips(conn: sqlite3.Connection) -> None:
+    conn.executemany(
+        """INSERT INTO tips
+           (tip_id, min_age, max_age, category, title, body, source_label, source_url, active)
+           VALUES (?,?,?,?,?,?,?,?,1)
+           ON CONFLICT(tip_id) DO UPDATE SET
+             min_age=excluded.min_age, max_age=excluded.max_age, category=excluded.category,
+             title=excluded.title, body=excluded.body, source_label=excluded.source_label,
+             source_url=excluded.source_url, active=excluded.active""",
+        TIP_SEEDS,
+    )
+
+
+def tips_for_age(age: int, limit: int = 3) -> list[dict[str, Any]]:
+    """연령대에 맞는 활성 팁을 무작위 순서로 가져온다."""
+    safe_limit = max(1, min(int(limit), 6))
+    rows = db().execute(
+        """SELECT tip_id, category, title, body, source_label, source_url
+           FROM tips
+           WHERE active=1 AND min_age <= ? AND max_age >= ?
+           ORDER BY RANDOM() LIMIT ?""",
+        (int(age), int(age), safe_limit),
+    ).fetchall()
+    return [dict(row) for row in rows]
 
 
 # --------------------------------------------------------------------------

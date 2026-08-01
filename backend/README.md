@@ -51,6 +51,16 @@ cd backend && ../.venv/bin/python -m uvicorn app.main:app --port 8787
 CORS는 전체 허용이라 확장 프로그램 content script에서 직접 호출하면 된다.
 `credentials`는 쓰지 않는다. 상태는 전부 `case_id`로 이어진다.
 
+### 로딩 중 경제 팁
+
+결제 판단이나 에이전트 조사가 길어질 때 확장 프로그램은 아래 API로 팁을 읽어 화면에 순환 표시한다.
+
+```text
+GET /api/tips?age=20&limit=3
+```
+
+팁은 SQLite의 `tips` 테이블에 저장되며, 서버 시작 시 20대 대상 청약·청년 금융·주거·저축·신용 관리·커리어 팁이 시드된다. 모집 일정처럼 자주 바뀌는 사실은 고정하지 않고 공식 확인 채널만 함께 제공한다.
+
 ### 1. 상품 페이지 진입 시
 
 ```js
