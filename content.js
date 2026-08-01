@@ -2,7 +2,7 @@
   "use strict";
 
   const ROOT_ID = "agent24-purchase-guard";
-  const BACKEND_URL = "http://localhost:8000";
+  const BACKEND_URL = "http://localhost:8787";
   const { findSite, matchesPaymentText } = globalThis.Agent24Sites;
   const currentSite = findSite(location.hostname);
 
@@ -31,7 +31,7 @@
   let dialogElements = null;
   let resumeAction = null;
   let previouslyFocused = null;
-  let wizard = null; // { sessionId }
+  let wizard = null; // { caseId }
 
   function getControlText(control) {
     return [
@@ -80,7 +80,7 @@
     return isPaymentControl(submitter);
   }
 
-  // ---- Dialog shell -------------------------------------------------
+  // ---- Dialog shell (unchanged) -------------------------------------------------
 
   function buildDialog() {
     if (dialogElements) {
@@ -126,6 +126,7 @@
     if (!dialogElements || dialogElements.root.hidden) {
       return;
     }
+    stopInvestigatingTimer();
     dialogElements.root.hidden = true;
     document.documentElement.classList.remove("agent24-dialog-open");
     if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) {
@@ -176,7 +177,7 @@
     focusable[nextIndex].focus();
   }
 
-  // ---- Static fallback (used if the backend is unreachable at any point) -------------------------------------------------
+  // ---- Static fallback (unchanged — used if the backend is unreachable at any point) -------------------------------------------------
 
   function renderStaticFallback() {
     dialogElements.screen.innerHTML = `
@@ -193,7 +194,7 @@
     focusFirst();
   }
 
-  // ---- Backend calls (short timeout, fall back to static on any failure) -------------------------------------------------
+  // ---- Backend calls (unchanged signature, new base URL/timeouts) -------------------------------------------------
 
   async function callBackend(path, body, timeoutMs) {
     const controller = new AbortController();
@@ -210,6 +211,80 @@
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  function escapeAttr(str) {
+    return String(str ?? "").replace(/"/g, "&quot;");
+  }
+
+  // ---- /api/observe — fired once at page load, independent of the checkout click -------------------------------------------------
+  // So the server can compute dwell_minutes (checkout_at - detected_at) later.
+  // Fire-and-forget; failures are ignored.
+
+  function fireObserveOnce() {
+    let attempts = 0;
+    const tryObserve = () => {
+      attempts += 1;
+      let scraped = null;
+      try {
+        scraped = currentSite.scrapeProduct?.();
+      } catch {
+        // best-effort
+      }
+      if (scraped?.name || attempts >= 5) {
+        if (scraped?.name) {
+          callBackend(
+            "/api/observe",
+            {
+              profile_id: "B",
+              product: {
+                name: scraped.name,
+                price: scraped.price ?? 0,
+                category: guessCategory(scraped.name),
+              },
+            },
+            5000,
+          ).catch(() => {});
+        }
+        return;
+      }
+      setTimeout(tryObserve, 1000);
+    };
+    tryObserve();
+  }
+
+  // ---- DOM signal collection for /api/case -------------------------------------------------
+
+  function labelFor(input) {
+    if (input.labels && input.labels.length) return input.labels[0].textContent.trim();
+    const aria = input.getAttribute("aria-label");
+    if (aria) return aria.trim();
+    const wrapping = input.closest("label");
+    return wrapping ? wrapping.textContent.trim() : null;
+  }
+
+  function collectSignals() {
+    const page_text = (document.body?.innerText || "").slice(0, 20000);
+
+    const preselected_inputs = Array.from(
+      document.querySelectorAll('input[type="checkbox"]:checked, input[type="radio"]:checked'),
+    )
+      .map(labelFor)
+      .filter(Boolean)
+      .slice(0, 20);
+
+    const countdown_timers = [];
+    for (const el of document.querySelectorAll("body *")) {
+      if (el.children.length === 0) {
+        const t = el.textContent.trim();
+        if (t.length > 0 && t.length < 40 && /\d{1,2}:\d{2}(:\d{2})?/.test(t)) {
+          countdown_timers.push(t);
+          if (countdown_timers.length >= 10) break;
+        }
+      }
+    }
+
+    return { page_text, dom_signals: { preselected_inputs, countdown_timers } };
   }
 
   // ---- Screen 0: confirm scraped (or manually entered) product info -------------------------------------------------
@@ -243,180 +318,344 @@
       const name = document.getElementById("agent24-product-name").value.trim();
       const price = Number(document.getElementById("agent24-product-price").value);
       if (!name || !price || price <= 0) return;
-      await startCheckout(name, price);
+      await startCase(name, price);
     };
     focusFirst();
   }
 
-  function escapeAttr(str) {
-    return String(str).replace(/"/g, "&quot;");
-  }
+  // ---- /api/case — the checkout-click trigger, branches 3 ways -------------------------------------------------
 
-  async function startCheckout(name, price) {
+  async function startCase(name, price) {
     dialogElements.screen.innerHTML = `<p>확인하는 중입니다...</p>`;
+    const laterLabelTimer = setTimeout(() => {
+      if (dialogElements?.screen) {
+        dialogElements.screen.innerHTML = `<p>최저가를 찾는 중입니다...</p>`;
+      }
+    }, 1500);
+
+    const { page_text, dom_signals } = collectSignals();
     let result;
     try {
       result = await callBackend(
-        "/api/checkout",
+        "/api/case",
         {
-          product_name: name,
-          price,
-          category: guessCategory(name),
-          timestamp: new Date().toISOString(),
+          profile_id: "B",
+          product: { name, price, category: guessCategory(name) },
+          page_text,
+          dom_signals,
+          payment_method_bnpl: false,
         },
-        8000,
+        130000,
       );
     } catch {
+      clearTimeout(laterLabelTimer);
       renderStaticFallback();
       return;
     }
-    wizard = { sessionId: result.session_id };
-    renderInfoScreen(result);
+    clearTimeout(laterLabelTimer);
+
+    wizard = { caseId: result.case_id };
+
+    if (result.parse_failed) {
+      renderParseFailedScreen(result);
+    } else if (result.mode === "price_only") {
+      renderPriceOnlyScreen(result);
+    } else {
+      renderQuestionScreen(result);
+    }
   }
 
-  // ---- Screen 1: budget info + reason -------------------------------------------------
-
-  function renderInfoScreen(result) {
-    const b = result.budget;
+  function renderParseFailedScreen(result) {
     dialogElements.screen.innerHTML = `
       <p class="agent24-label">AGENT24 · ${currentSite.name}</p>
-      <h2 id="agent24-title">결제 전 확인</h2>
-      <p>${escapeAttr(result.message)}</p>
-      <p class="agent24-budget">이번 달 자유소비 예산 ₩${b.monthly_budget.toLocaleString()} 중 이 결제는 ${b.purchase_pct_of_budget}%를 차지합니다. 결제 후 남는 돈: ₩${b.remaining_budget_after.toLocaleString()}</p>
-      <label class="agent24-field">왜 지금 이 결제가 필요하신가요?
-        <textarea id="agent24-reason" rows="2" placeholder="간단히 적어주세요"></textarea>
+      <h2 id="agent24-title">상품 정보를 확인하지 못했어요</h2>
+      <p>${escapeAttr(result.message || "판단할 근거가 없어 결제를 막지 않습니다.")}</p>
+      <div class="agent24-actions">
+        <button type="button" class="agent24-button agent24-button-primary" id="agent24-parsefail-continue">계속</button>
+      </div>
+    `;
+    document.getElementById("agent24-parsefail-continue").onclick = () => proceedWithOriginal();
+    focusFirst();
+  }
+
+  // ---- Shared render helpers for budget / dark patterns -------------------------------------------------
+
+  function renderBudgetBlock(b) {
+    if (!b) return "";
+    return `
+      <p class="agent24-budget">
+        이번 달 남은 자유예산 ₩${(b.remaining ?? 0).toLocaleString()} 중 이 결제는 ₩${(b.product_price ?? 0).toLocaleString()}이며,
+        결제 후 남는 돈: ₩${(b.after_purchase ?? 0).toLocaleString()} (급여일까지 D-${b.days_until_payday ?? "?"})
+        ${b.upcoming_total ? `<br/>예정 지출 ₩${b.upcoming_total.toLocaleString()}까지 반영하면: ₩${(b.after_upcoming ?? 0).toLocaleString()}` : ""}
+      </p>
+    `;
+  }
+
+  function renderDarkPatternBlock(patterns) {
+    if (!patterns || !patterns.length) return "";
+    return `
+      <div class="agent24-dark-patterns">
+        <p class="agent24-dark-patterns-title">이 페이지에서 탐지된 눈속임 설계</p>
+        ${patterns
+          .map(
+            (p) => `
+          <p class="agent24-dark-pattern-item">
+            · ${escapeAttr(p.type)} — "${escapeAttr(p.evidence)}"
+            (${p.confirmed ? "실제로 확인됨" : "문구만 확인, 진위 미확인"})
+          </p>
+        `,
+          )
+          .join("")}
+      </div>
+    `;
+  }
+
+  // ---- price_only screen (input 0회 — investigation already ran server-side) -------------------------------------------------
+
+  function renderPriceOnlyScreen(result) {
+    const pc = result.price_check || {};
+    let priceHtml;
+    if (pc.searched && pc.cheaper_found) {
+      priceHtml = `
+        <p class="agent24-price-found">✅ 더 싼 곳이 있습니다 · ₩${(pc.best_price ?? 0).toLocaleString()} (₩${(pc.saving ?? 0).toLocaleString()} 절약)</p>
+        <p class="agent24-price-seller">판매처: ${escapeAttr(pc.seller || "확인됨")}${pc.source_url ? ` · <a href="${escapeAttr(pc.source_url)}" target="_blank">근거</a>` : ""}</p>
+      `;
+    } else {
+      priceHtml = `<p>${pc.searched ? "더 싼 곳을 찾지 못했습니다. 최저가라고 단정하지 않습니다." : "가격 비교를 수행하지 못했습니다."}</p>`;
+    }
+
+    dialogElements.screen.innerHTML = `
+      <p class="agent24-label">AGENT24 · 심문 없음 · 마찰 없음</p>
+      <h2 id="agent24-title">가격만 확인했습니다</h2>
+      <p>${escapeAttr(result.mode_reason || "")}</p>
+      ${renderBudgetBlock(result.budget)}
+      ${priceHtml}
+      ${pc.note ? `<p class="agent24-hint">${escapeAttr(pc.note)}</p>` : ""}
+      ${result.agent_error ? `<p class="agent24-hint">일부 조사에 실패했지만 확인된 정보만으로 안내합니다.</p>` : ""}
+      ${renderDarkPatternBlock(result.dark_patterns)}
+      <div class="agent24-actions">
+        <button type="button" class="agent24-button agent24-button-secondary" id="agent24-priceonly-cancel">취소</button>
+        <button type="button" class="agent24-button agent24-button-primary" id="agent24-priceonly-buy">결제하기</button>
+      </div>
+    `;
+
+    document.getElementById("agent24-priceonly-cancel").onclick = () => closeDialog();
+    document.getElementById("agent24-priceonly-buy").onclick = async () => {
+      await resolveCase("accept");
+      proceedWithOriginal();
+    };
+    focusFirst();
+  }
+
+  // ---- challenge screen: question + alternatives yes/no (the ONE user input round trip) -------------------------------------------------
+
+  function renderQuestionScreen(result) {
+    const q = result.question || {
+      format: "text",
+      text: "왜 지금 사야 합니까?",
+      options: [],
+      allow_free_text: true,
+      free_text_placeholder: "",
+    };
+
+    const optionsHtml =
+      q.format === "choice"
+        ? `
+      <div class="agent24-options">
+        ${q.options
+          .map(
+            (opt) => `
+          <label class="agent24-option">
+            <input type="checkbox" name="agent24-option" value="${escapeAttr(opt.id)}" />
+            ${escapeAttr(opt.label)}
+          </label>
+        `,
+          )
+          .join("")}
+      </div>
+    `
+        : "";
+
+    const freeTextNeeded = q.format === "text" || q.allow_free_text;
+
+    dialogElements.screen.innerHTML = `
+      <p class="agent24-label">AGENT24 · 결제 직전 개입</p>
+      <h2 id="agent24-title">${escapeAttr(q.text)}</h2>
+      ${renderBudgetBlock(result.budget)}
+      ${renderDarkPatternBlock(result.dark_patterns)}
+      ${optionsHtml}
+      ${
+        freeTextNeeded
+          ? `<label class="agent24-field">${q.format === "text" ? "" : "또는 직접 적어주세요"}
+        <textarea id="agent24-reason" rows="2" placeholder="${escapeAttr(q.free_text_placeholder || "간단히 적어주세요")}"></textarea>
+      </label>`
+          : ""
+      }
+      <label class="agent24-yesno">
+        <input type="checkbox" id="agent24-want-alt" checked />
+        ${escapeAttr(result.alternatives_prompt || "다른 가격이나 대안 상품을 찾아드릴까요?")}
       </label>
       <div class="agent24-actions">
-        <button type="button" class="agent24-button agent24-button-secondary" id="agent24-info-cancel">취소</button>
-        <button type="button" class="agent24-button agent24-button-primary" id="agent24-info-continue" disabled>계속</button>
+        <button type="button" class="agent24-button agent24-button-secondary" id="agent24-question-cancel">결제 취소</button>
+        <button type="button" class="agent24-button agent24-button-primary" id="agent24-question-continue" disabled>조사 시작</button>
       </div>
     `;
+
+    const continueBtn = document.getElementById("agent24-question-continue");
     const textarea = document.getElementById("agent24-reason");
-    const continueBtn = document.getElementById("agent24-info-continue");
-    textarea.addEventListener("input", () => {
-      continueBtn.disabled = textarea.value.trim().length < 2;
-    });
-    document.getElementById("agent24-info-cancel").onclick = () => closeDialog();
-    continueBtn.onclick = () => submitReason(textarea.value.trim());
+    const checkboxes = Array.from(dialogElements.screen.querySelectorAll('input[name="agent24-option"]'));
+
+    function refreshEnabled() {
+      const anyChecked = checkboxes.some((cb) => cb.checked);
+      const hasText = textarea && textarea.value.trim().length > 0;
+      continueBtn.disabled = !(anyChecked || hasText);
+    }
+    checkboxes.forEach((cb) => cb.addEventListener("change", refreshEnabled));
+    textarea?.addEventListener("input", refreshEnabled);
+    refreshEnabled();
+
+    document.getElementById("agent24-question-cancel").onclick = () => closeDialog();
+    continueBtn.onclick = () => {
+      const selected = checkboxes.filter((cb) => cb.checked).map((cb) => cb.value);
+      const reason = textarea ? textarea.value.trim() : "";
+      const wantAlt = document.getElementById("agent24-want-alt").checked;
+      submitAnswer(selected, reason, wantAlt);
+    };
     focusFirst();
   }
 
-  async function submitReason(reason) {
-    dialogElements.screen.innerHTML = `<p>확인하는 중입니다...</p>`;
-    let interpretation;
-    try {
-      interpretation = await callBackend(`/api/checkout/${wizard.sessionId}/reason`, { reason }, 8000);
-    } catch {
-      renderStaticFallback();
-      return;
-    }
-    renderOfferScreen(interpretation);
-  }
+  // ---- Investigating screen (20-40s typical, up to ~120s) -------------------------------------------------
 
-  // ---- Screen 2: offer alternative -------------------------------------------------
+  let investigatingTimer = null;
+  const INVESTIGATING_LINES = [
+    "예산을 확인하고 있어요",
+    "비슷한 상품을 찾고 있어요",
+    "이전 구매 이력을 살펴보고 있어요",
+    "가격을 비교하고 있어요",
+  ];
 
-  function renderOfferScreen(interpretation) {
+  function renderInvestigatingScreen() {
     dialogElements.screen.innerHTML = `
-      <p class="agent24-label">이유: ${escapeAttr(interpretation.reason_summary)}</p>
-      <p>${escapeAttr(interpretation.offer_message)}</p>
-      <p class="agent24-offer-prompt">${escapeAttr(interpretation.offer_prompt)}</p>
-      <div class="agent24-actions">
-        <button type="button" class="agent24-button agent24-button-secondary" id="agent24-offer-no">아니요</button>
-        <button type="button" class="agent24-button agent24-button-primary" id="agent24-offer-yes">예, 보여주세요</button>
-      </div>
+      <p class="agent24-label">AGENT24 · 자율 조사 진행 중</p>
+      <h2 id="agent24-title">플래닝 모드</h2>
+      <p id="agent24-investigating-line">${INVESTIGATING_LINES[0]}</p>
+      <p class="agent24-hint" id="agent24-investigating-elapsed">0초 경과</p>
     `;
-    document.getElementById("agent24-offer-yes").onclick = () => chooseAlternative(true);
-    document.getElementById("agent24-offer-no").onclick = () => chooseAlternative(false);
-    focusFirst();
+    let elapsed = 0;
+    let lineIndex = 0;
+    investigatingTimer = setInterval(() => {
+      elapsed += 1;
+      const elapsedEl = document.getElementById("agent24-investigating-elapsed");
+      if (elapsedEl) elapsedEl.textContent = `${elapsed}초 경과`;
+      if (elapsed % 6 === 0) {
+        lineIndex = (lineIndex + 1) % INVESTIGATING_LINES.length;
+        const lineEl = document.getElementById("agent24-investigating-line");
+        if (lineEl) lineEl.textContent = INVESTIGATING_LINES[lineIndex];
+      }
+    }, 1000);
   }
 
-  async function chooseAlternative(wantAlternative) {
-    if (wantAlternative) {
-      dialogElements.screen.innerHTML = `<p>대안을 찾는 중입니다 (실시간 웹검색)...</p>`;
+  function stopInvestigatingTimer() {
+    if (investigatingTimer) {
+      clearInterval(investigatingTimer);
+      investigatingTimer = null;
     }
+  }
+
+  async function submitAnswer(selectedOptionIds, reason, wantAlternatives) {
+    renderInvestigatingScreen();
     let result;
     try {
       result = await callBackend(
-        `/api/checkout/${wizard.sessionId}/alternatives`,
-        { want_alternative: wantAlternative },
-        25000,
+        `/api/case/${wizard.caseId}/answer`,
+        { selected_option_ids: selectedOptionIds, reason, want_alternatives: wantAlternatives },
+        130000,
       );
     } catch {
+      stopInvestigatingTimer();
       renderStaticFallback();
       return;
     }
-    renderResolutionScreen(result);
+    stopInvestigatingTimer();
+    renderVerdictScreen(result);
   }
 
-  // ---- Screen 3: alternatives + final resolution -------------------------------------------------
+  // ---- Verdict screen -------------------------------------------------
 
-  function renderResolutionScreen(result) {
-    const savings = result.savings_if_no_purchase.amount;
-    let altHtml = "";
-    if (result.planning_used && result.alternatives.length) {
-      altHtml = `
-        <p class="agent24-alt-source">대안 출처: ${result.source === "web_search" ? "실시간 웹검색" : result.source}</p>
-        <div class="agent24-alt-cards">
-          ${result.alternatives
-            .map(
-              (alt, i) => `
-            <div class="agent24-alt-card">
-              <p class="agent24-alt-name">${escapeAttr(alt.name)}</p>
-              <p class="agent24-alt-price">₩${alt.price != null ? alt.price.toLocaleString() : "?"}</p>
-              <p class="agent24-alt-note">${escapeAttr(alt.note)}</p>
-              ${alt.savings_vs_original != null ? `<p class="agent24-alt-savings">이걸로 하면 ₩${alt.savings_vs_original.toLocaleString()} 절약</p>` : ""}
-              <p class="agent24-alt-disclaimer">정보 제공용이며 자동으로 구매되지 않습니다.</p>
-              <button type="button" class="agent24-button agent24-button-secondary agent24-alt-buy-btn" data-index="${i}" data-url="${alt.source_url || ""}">이 대안으로 이동</button>
-            </div>
-          `,
-            )
-            .join("")}
-        </div>
-      `;
-    }
+  const VERDICT_LABELS = { PASS: "통과", WARN: "주의", HOLD: "보류", STRONG_HOLD: "강력 보류" };
+  const CLAIM_STATUS_LABELS = {
+    supported: "확인됨",
+    refuted: "반박됨",
+    unverifiable: "확인불가",
+    unverified: "미확인",
+  };
+
+  function renderVerdictScreen(result) {
+    const verdict = result.verdict || "PASS";
+    const savings = result.savings || {};
+
+    const breakdownHtml = (result.breakdown || [])
+      .map((b) => `<p class="agent24-score-item">· ${escapeAttr(b.label)} <b>+${b.points}</b></p>`)
+      .join("");
+
+    const claimsHtml = (result.claims || [])
+      .map(
+        (c) => `
+      <p class="agent24-claim">· [${escapeAttr(c.type)}] ${escapeAttr(c.text)} → <b>${CLAIM_STATUS_LABELS[c.status] || c.status}</b></p>
+    `,
+      )
+      .join("");
+
+    const holdHtml =
+      verdict === "HOLD" || verdict === "STRONG_HOLD"
+        ? `<p class="agent24-hold-notice">재검토 예약: ${escapeAttr(result.release_at || "")} — 이 시각이 되면 입력 없이 스스로 다시 확인합니다.</p>`
+        : "";
 
     dialogElements.screen.innerHTML = `
-      <p class="agent24-label">AGENT24 · ${currentSite.name}</p>
-      <h2 id="agent24-title">최종 선택</h2>
-      <p>지금 사지 않으면 ₩${savings.toLocaleString()}을 아낄 수 있어요.</p>
-      ${altHtml}
+      <p class="agent24-label">AGENT24 · 규칙 엔진 판정</p>
+      <p class="agent24-verdict-badge agent24-verdict-${verdict}">${VERDICT_LABELS[verdict] || verdict} · 위험 점수 ${result.risk_score ?? 0}</p>
+      <p>${escapeAttr(result.summary || "")}</p>
+      ${result.capped_reason ? `<p class="agent24-hint">${escapeAttr(result.capped_reason)}</p>` : ""}
+      ${claimsHtml ? `<div class="agent24-claims"><p class="agent24-section-title">주장 분해</p>${claimsHtml}</div>` : ""}
+      ${breakdownHtml ? `<div class="agent24-breakdown"><p class="agent24-section-title">점수 근거</p>${breakdownHtml}</div>` : ""}
+      <p class="agent24-savings">
+        안 사면 ₩${(savings.not_buying_saves ?? 0).toLocaleString()} 절약
+        ${savings.cheaper_saves ? ` · 더 싼 곳으로 바꾸면 ₩${savings.cheaper_saves.toLocaleString()} 절약` : ""}
+        ${savings.work_hours_saved ? ` · 노동 ${savings.work_hours_saved.toFixed(1)}시간` : ""}
+      </p>
+      ${result.follow_up_question ? `<p class="agent24-followup">${escapeAttr(result.follow_up_question)}</p>` : ""}
+      ${holdHtml}
+      ${result.agent_error ? `<p class="agent24-hint">일부 조사에 실패했지만 확인된 정보만으로 판정했습니다.</p>` : ""}
       <div class="agent24-actions">
-        <button type="button" class="agent24-button agent24-button-primary" id="agent24-resolve-cancel">결제 취소</button>
-        <button type="button" class="agent24-button agent24-button-secondary" id="agent24-resolve-original">그래도 원래 상품 결제</button>
+        <button type="button" class="agent24-button agent24-button-primary" id="agent24-verdict-accept">판정 수용</button>
+        <button type="button" class="agent24-button agent24-button-secondary" id="agent24-verdict-override">그래도 지금 구매</button>
       </div>
     `;
 
-    document.getElementById("agent24-resolve-original").onclick = () => resolveSession("buy_original");
-    document.getElementById("agent24-resolve-cancel").onclick = () => resolveSession("cancel");
-    dialogElements.screen.querySelectorAll(".agent24-alt-buy-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const url = btn.dataset.url;
-        if (url) window.open(url, "_blank");
-        resolveSession("buy_alternative", Number(btn.dataset.index));
-      });
-    });
+    document.getElementById("agent24-verdict-accept").onclick = async () => {
+      await resolveCase("accept");
+      if (verdict === "PASS" || verdict === "WARN") {
+        proceedWithOriginal();
+      } else {
+        closeDialog();
+      }
+    };
+    document.getElementById("agent24-verdict-override").onclick = async () => {
+      await resolveCase("override");
+      proceedWithOriginal();
+    };
     focusFirst();
   }
 
-  async function resolveSession(decision, alternativeIndex) {
+  async function resolveCase(action, reason = "") {
     try {
-      await callBackend(
-        `/api/checkout/${wizard.sessionId}/resolve`,
-        { decision, alternative_index: alternativeIndex ?? null },
-        8000,
-      );
+      await callBackend(`/api/case/${wizard.caseId}/resolve`, { action, reason }, 8000);
     } catch {
-      // Even if logging the resolution fails, still honor the user's choice below.
-    }
-
-    if (decision === "buy_original") {
-      proceedWithOriginal();
-    } else {
-      closeDialog();
+      // Even if logging the resolution fails, still honor the user's choice at the call site.
     }
   }
 
-  // ---- Interception -------------------------------------------------
+  // ---- Interception (unchanged) -------------------------------------------------
 
   function interceptClick(event) {
     const control = getInteractiveControl(event.target);
@@ -480,6 +719,8 @@
     allowedForms.add(form);
     form.requestSubmit(submitter || undefined);
   }
+
+  fireObserveOnce();
 
   document.addEventListener("click", interceptClick, true);
   document.addEventListener("submit", interceptSubmit, true);
