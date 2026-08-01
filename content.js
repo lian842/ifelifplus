@@ -623,8 +623,7 @@
     }
 
     const challenges = wizard.cases.filter(
-      (entry) =>
-        !entry.initial.parse_failed && entry.initial.mode !== "price_only",
+      (entry) => !entry.initial.parse_failed,
     );
     if (challenges.length) {
       renderBatchQuestionScreen(challenges);
@@ -731,10 +730,7 @@
     try {
       await Promise.all(
         wizard.cases.map(async (entry) => {
-          if (
-            entry.initial.parse_failed ||
-            entry.initial.mode === "price_only"
-          ) {
+          if (entry.initial.parse_failed) {
             entry.final = entry.initial;
             return;
           }
