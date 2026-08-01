@@ -442,7 +442,7 @@
     } catch {
       // The visual shell remains usable with demo memory while the local backend starts.
     }
-    return { remaining: 820000, monthlyFreeBudget: 820000 };
+    return { remaining: 160540, monthlyFreeBudget: 300000 };
   }
 
   async function readCheckoutItems() {
