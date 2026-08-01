@@ -581,6 +581,10 @@
       <p>${escapeAttr(result.mode_reason || "")}</p>
       ${renderBudgetBlock(result.budget)}
       ${priceHtml}
+      ${renderOffersBlock(
+        { offers: pc.offers, not_buying_saves: result.budget?.product_price ?? 0 },
+        { summary: pc.structural_alternative },
+      )}
       ${pc.note ? `<p class="agent24-hint">${escapeAttr(pc.note)}</p>` : ""}
       ${result.agent_error ? `<p class="agent24-hint">일부 조사에 실패했지만 확인된 정보만으로 안내합니다.</p>` : ""}
       <div class="agent24-actions">
@@ -740,6 +744,44 @@
     unverified: "미확인",
   };
 
+  // 확인된 판매처를 링크와 함께 보여준다.
+  // 링크 없는 가격은 사용자가 확인할 방법이 없어 아무 소용이 없다.
+  // 못 찾았으면 못 찾았다고 말한다 — 현재 가격이 최저가라고 단정하지 않는다.
+  function renderOffersBlock(savings, alternative) {
+    const offers = savings?.offers || [];
+    const altText = alternative?.summary ? escapeAttr(alternative.summary) : "";
+
+    if (!offers.length) {
+      return `
+        <p class="agent24-hint">
+          다른 판매처를 확인하지 못했습니다. 현재 가격이 최저가라고 단정하지는 않습니다.
+        </p>
+        ${altText ? `<p class="agent24-hint">${altText}</p>` : ""}
+      `;
+    }
+
+    const rows = offers
+      .map((o) => {
+        const price = Number(o.price) || 0;
+        const cheaper = price > 0 && price < (savings.not_buying_saves ?? 0);
+        return `
+        <p class="agent24-offer${cheaper ? " agent24-offer-cheaper" : ""}">
+          <b>₩${price.toLocaleString()}</b> · ${escapeAttr(o.seller || "판매처 미상")}
+          ${o.url ? ` <a href="${escapeAttr(o.url)}" target="_blank" rel="noreferrer">바로가기</a>` : ""}
+          ${o.note ? ` <span class="agent24-offer-note">${escapeAttr(o.note)}</span>` : ""}
+        </p>`;
+      })
+      .join("");
+
+    return `
+      <div class="agent24-offers">
+        <p class="agent24-section-title">대안</p>
+        ${rows}
+        ${altText ? `<p class="agent24-offer-note">${altText}</p>` : ""}
+      </div>
+    `;
+  }
+
   function renderVerdictScreen(result) {
     const verdict = result.verdict || "PASS";
     const savings = result.savings || {};
@@ -775,8 +817,10 @@
       <p class="agent24-savings">
         안 사면 ₩${(savings.not_buying_saves ?? 0).toLocaleString()} 절약
         ${savings.cheaper_saves ? ` · 더 싼 곳으로 바꾸면 ₩${savings.cheaper_saves.toLocaleString()} 절약` : ""}
+        ${savings.annual_saving ? ` · 대안으로 바꾸면 연간 ₩${savings.annual_saving.toLocaleString()}` : ""}
         ${savings.work_hours_saved ? ` · 노동 ${savings.work_hours_saved.toFixed(1)}시간` : ""}
       </p>
+      ${renderOffersBlock(savings, result.alternative)}
       ${result.follow_up_question ? `<p class="agent24-followup">${escapeAttr(result.follow_up_question)}</p>` : ""}
       ${holdHtml}
       ${result.agent_error ? `<p class="agent24-hint">일부 조사에 실패했지만 확인된 정보만으로 판정했습니다.</p>` : ""}

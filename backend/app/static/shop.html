@@ -336,7 +336,7 @@ function savingsBox(s) {
   if (!s) return '';
   const offers = (s.offers || []).map(o => `
     <li><b>${won(o.price)}</b> · ${o.seller}
-      ${o.url ? ` <a href="${o.url}" target="_blank">근거</a>` : ''}
+      ${o.url ? ` <a href="${o.url}" target="_blank">바로가기</a>` : ''}
       ${o.note ? ` <span class="muted">${o.note}</span>` : ''}</li>`).join('');
   return `
     <p class="muted">아낄 수 있는 돈</p>
@@ -346,7 +346,7 @@ function savingsBox(s) {
       <div class="num"><b>${s.annual_saving ? won(s.annual_saving) : '—'}</b><span>대안으로 바꾸면 연간</span></div>
     </div>
     ${s.work_hours_saved != null ? `<p class="muted">이 금액은 당신의 노동 ${s.work_hours_saved}시간입니다.</p>` : ''}
-    ${offers ? `<p class="muted">확인된 판매처 (가격순)</p><ul class="bd">${offers}</ul>`
+    ${offers ? `<p class="muted">대안</p><ul class="bd">${offers}</ul>`
              : `<p class="muted">더 싼 판매처는 확인하지 못했습니다. 최저가라고 단정하지 않습니다.</p>`}`;
 }
 
@@ -366,7 +366,7 @@ function renderVerdict(res) {
     <p class="muted">판정 근거 (LLM이 아니라 규칙으로 계산)</p>
     <ul class="bd">${bd || '<li>해당 항목 없음</li>'}</ul>
     ${savingsBox(res.savings)}
-    ${res.alternative && res.alternative.summary ? `<p class="muted">대안</p><p>${res.alternative.summary}</p>` : ''}
+    ${res.alternative && res.alternative.summary ? `<p>${res.alternative.summary}</p>` : ''}
     ${res.follow_up_question ? `<p class="muted">에이전트의 되물음</p><p><b>${res.follow_up_question}</b></p>` : ''}
     ${res.agent_memories && res.agent_memories.length ? `<p class="muted">에이전트가 스스로 기록한 관찰</p><ul class="bd">${res.agent_memories.map(m=>`<li>${m.text} <span class="muted">(${m.confidence})</span></li>`).join('')}</ul>` : ''}
     ${res.release_at ? `<p class="muted">재검토 예약: <code class="small">${res.release_at}</code> — 이 시각이 되면 <b>사용자 입력 없이</b> 에이전트가 스스로 깨어납니다.</p>` : ''}

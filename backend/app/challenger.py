@@ -72,9 +72,19 @@ SYSTEM_PROMPT = """\
    get_price_comparison_sources를 먼저 호출해 검색 전략을 받고,
    거기서 준 쿼리로 web_search를 실행하라. 다나와·에누리·네이버쇼핑이 우선이다.
    그냥 "상품명 최저가"로 검색하면 블로그와 광고글이 걸려 엉뚱한 가격을 물어온다.
-   찾은 판매처는 offers 배열에 가격 오름차순으로 담고, 각각 근거 URL을 붙여라.
-   모델명·용량·수량이 정확히 같은 것만 담아라. 규격이 다르면 비교가 아니라 오해다.
-   배송비 별도면 note에 적어라. 표기가만 싸고 총액이 비싼 경우가 흔하다.
+   ★ offers는 **최대 2개**다. 가장 쓸모 있는 것만 남겨라.
+   목록을 길게 만드는 것은 도움이 아니라 소음이다. 확실한 1개가 애매한 3개보다 낫다.
+
+   각 offer가 만족해야 하는 조건 — 하나라도 못 채우면 그 offer는 **빼라**:
+   - 실제 판매처 이름 (쿠팡, 11번가, 무신사 …). 다나와·에누리는 판매처가 아니라 비교 사이트다.
+   - 그 판매처에서 **바로 구매 가능한 상품 페이지 URL**.
+     다나와 가격비교 페이지에서 "쿠팡 4,200원"을 봤다면, 링크는 그 쿠팡 상품 페이지여야 한다.
+     비교 페이지 URL밖에 없으면 그 offer는 담지 마라.
+   - 대상 상품과 규격(용량·수량·모델)이 같거나, 다르다면 **무엇이 다른지 확정적으로** 안다.
+
+   note는 확인된 사실만 한 구절로 적는다. 예: "배송비 3,000원 별도", "품절", "500ml 20개입".
+   "규격이 확인되지 않아 동일 여부 미확인" 같은 문장은 **절대 쓰지 마라.**
+   확인하지 못했으면 그 offer를 빼는 것이 정직이지, 불확실성을 사용자에게 떠넘기는 것이 아니다.
 
 4. 확인하지 못한 것을 추측하지 마라.
    검증 실패 시 반드시 이렇게 말한다:
@@ -135,9 +145,11 @@ class Claim(BaseModel):
 class Findings(BaseModel):
     claims: list[Claim]
     offers: list[PriceOffer] = Field(
-        description="더 싼 판매처 목록. 가격 오름차순. 확인 못 했으면 빈 배열"
+        description=("대안 판매처. 가격 오름차순으로 **최대 2개**. 가장 쓸모 있는 것만 남긴다. "
+                     "규격을 확인하지 못한 상품은 담지 마라 — 3개를 애매하게 주는 것보다 "
+                     "확실한 1개를 주는 편이 낫다. 없으면 빈 배열")
     )
-    cheaper_price: int = Field(description="확인된 최저가. 못 찾았으면 0")
+    cheaper_price: int = Field(description="offers 중 현재 가격보다 싼 것의 최저가. 없으면 0")
     specific_use_case_given: bool = Field(description="사용 시점·상황이 구체적으로 제시되었는가")
     no_owned_substitute: bool = Field(description="대체 가능한 보유품이 없음이 확인되었는가")
     verified_lowest_price: bool = Field(description="실제로 최저가임을 확인했는가. 미확인이면 false")
@@ -169,10 +181,20 @@ class Question(BaseModel):
 
 
 class PriceOffer(BaseModel):
-    seller: str = Field(description="판매처 이름")
+    seller: str = Field(
+        description="실제로 파는 곳의 이름(쿠팡, 11번가, 무신사 …). "
+                    "'다나와', '에누리' 같은 가격비교 사이트를 판매처로 적지 마라"
+    )
     price: int = Field(description="확인된 가격(원). 배송비 별도면 note에 적는다")
-    url: str = Field(description="근거 URL. 없으면 빈 문자열")
-    note: str = Field(description="배송비·조건 등 단서. 없으면 빈 문자열")
+    url: str = Field(
+        description="그 판매처에서 **바로 살 수 있는 상품 페이지 URL**. "
+                    "다나와·에누리의 가격비교 페이지 URL을 넣지 마라. "
+                    "구매 페이지 URL을 확보하지 못했으면 이 offer 자체를 빼라"
+    )
+    note: str = Field(
+        description="배송비·품절·용량 차이처럼 **확인된 사실만** 한 구절로. 없으면 빈 문자열. "
+                    "'확인되지 않아 미확인' 같은 불확실성 서술은 절대 쓰지 마라"
+    )
 
 
 class PriceCheck(BaseModel):
@@ -185,7 +207,7 @@ class PriceCheck(BaseModel):
     source_url: str = Field(description="근거 URL. 없으면 빈 문자열")
     saving: int = Field(description="현재 가격 대비 절약액. 없으면 0")
     offers: list[PriceOffer] = Field(
-        description="확인된 판매처 목록. 가격 오름차순. 확인 못 했으면 빈 배열"
+        description="대안 판매처. 가격 오름차순으로 **최대 2개**. 규격을 확인하지 못한 것은 빼라"
     )
     structural_alternative: str = Field(
         description="반복 구매 소모품일 때의 구조적 대안과 손익분기. 해당 없으면 빈 문자열"
@@ -405,7 +427,12 @@ def build_input(case: dict[str, Any], profile: dict[str, Any], classification: d
 {user_reason.strip() or '(답변 없음)'}
 
 [사용자가 "다른 가격·상품을 찾아달라"에 답한 것]
-{'예 — 더 싼 판매처와 대안을 찾아 제시하라.' if want_alternatives
+{'''예 — 사용자가 직접 요청했다. 이건 선택이 아니라 지시다.
+  get_price_comparison_sources를 호출하고, 받은 쿼리로 web_search를 실행하고,
+  확인한 판매처를 offers에 URL과 함께 담아라. 보유품이 있든 없든 이 작업은 한다.
+  "이미 갖고 있으니 대안 탐색을 생략했다"는 답은 요청을 무시한 것이다.
+  정말 아무 판매처도 확인하지 못했을 때만 빈 배열로 두고, 그 이유를 alternative_summary에 쓴다.'''
+ if want_alternatives
  else '아니오 — 대안 탐색은 하지 마라. 주장 검증에만 집중하라. offers는 빈 배열로 둔다.'}
 
 이 답변을 claim으로 분해하고, 필요한 도구만 골라 조사한 뒤 Findings로 보고하라.
@@ -434,9 +461,10 @@ async def investigate(case: dict[str, Any], profile: dict[str, Any],
         result = Runner.run_streamed(agent, input=prompt, context=ctx, max_turns=MAX_TURNS)
         await asyncio.wait_for(_pump(result, case["case_id"]), timeout=RUN_TIMEOUT_S)
         findings: Findings = result.final_output
+        out = _trim_offers(findings.model_dump())
         events.emit("system", {"step": "agent_run_done",
                                "tool_calls": _count_tool_calls(result)}, case_id=case["case_id"])
-        return findings.model_dump(), ctx, None
+        return out, ctx, None
     except Exception as exc:  # noqa: BLE001 - 라이브 데모에서 절대 죽지 않는다
         msg = f"{type(exc).__name__}: {exc}"
         events.emit("system", {"step": "agent_run_failed", "error": msg}, case_id=case["case_id"])
@@ -458,7 +486,11 @@ PRICE_ONLY_PROMPT = """\
 0. get_price_comparison_sources를 먼저 호출해 검색 전략을 받는다.
    다나와·에누리·네이버쇼핑을 겨냥한 쿼리로 web_search를 실행하라.
    "상품명 최저가"로만 검색하면 블로그·광고글이 걸린다.
-   찾은 판매처는 offers에 가격 오름차순으로 담고 각각 근거 URL을 붙여라.
+   찾은 판매처는 offers에 가격 오름차순으로 **최대 2개**만 담는다.
+   각 offer는 실제 판매처 이름 + **바로 구매 가능한 상품 페이지 URL**을 가져야 한다.
+   다나와에서 "쿠팡 4,200원"을 봤다면 링크는 그 쿠팡 상품 페이지여야 한다.
+   비교 페이지 URL밖에 없거나 규격을 확정하지 못했으면 그 offer를 빼라.
+   note에 "규격 미확인" 같은 불확실성 서술을 쓰지 마라 — 뺄지 담을지만 정한다.
 1. get_purchase_history로 반복 구매 소모품인지 먼저 확인한다.
    - 반복 구매라면 find_alternatives(mode='longterm_substitute')로 손익분기 계산 근거를 받고,
      web_search로 실제 대체재 가격을 찾아 손익분기 개월수를 직접 계산한다.
@@ -512,10 +544,11 @@ async def price_check(case: dict[str, Any], profile: dict[str, Any],
     try:
         result = Runner.run_streamed(build_price_agent(), input=prompt, context=ctx, max_turns=10)
         await asyncio.wait_for(_pump(result, case["case_id"]), timeout=RUN_TIMEOUT_S)
-        out: PriceCheck = result.final_output
+        checked: PriceCheck = result.final_output
+        out = _trim_offers(checked.model_dump())
         events.emit("system", {"step": "price_check_done",
                                "tool_calls": _count_tool_calls(result)}, case_id=case["case_id"])
-        return out.model_dump(), ctx, None
+        return out, ctx, None
     except Exception as exc:  # noqa: BLE001
         msg = f"{type(exc).__name__}: {exc}"
         events.emit("system", {"step": "price_check_failed", "error": msg}, case_id=case["case_id"])
@@ -536,6 +569,38 @@ async def _pump(result: Any, case_id: str) -> None:
                             case_id=case_id)
             elif ev.name == "message_output_created":
                 events.emit("message", item.raw_item, case_id=case_id)
+
+
+MAX_OFFERS = 2
+
+# 사용자가 실제로 확인할 수 없는 offer를 걸러내기 위한 최소 조건.
+# 링크 없이 가격만 있는 줄은 정보가 아니라 소음이다.
+_COMPARISON_HOSTS = ("danawa.com", "enuri.com", "prod.danawa", "search.danawa")
+
+
+def _trim_offers(payload: dict[str, Any]) -> dict[str, Any]:
+    """offers를 가격순 최대 2개로 자르고, 확인 불가능한 항목을 버린다.
+
+    프롬프트로 지시했더라도 모델 순응에 맡기지 않는다. 화면에 나가는 것은 여기서 정한다.
+    """
+    offers = payload.get("offers") or []
+    kept = []
+    for o in offers:
+        url = (o.get("url") or "").strip()
+        # 살 수 없는 링크는 버린다. 가격비교 페이지는 판매처가 아니다.
+        if not url.startswith("http"):
+            continue
+        if any(h in url for h in _COMPARISON_HOSTS):
+            continue
+        # "확인되지 않아 미확인" 류의 불확실성 서술은 화면에서 지운다.
+        note = (o.get("note") or "").strip()
+        if any(w in note for w in ("미확인", "확인되지 않", "확인할 수 없")):
+            o = {**o, "note": ""}
+        kept.append(o)
+
+    kept.sort(key=lambda o: int(o.get("price") or 0) or 10**12)
+    payload["offers"] = kept[:MAX_OFFERS]
+    return payload
 
 
 def _count_tool_calls(result: Any) -> int:
