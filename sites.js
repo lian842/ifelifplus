@@ -146,6 +146,47 @@
       paymentSelectors: [],
     },
     {
+      id: "11st",
+      name: "11번가",
+      hostname: /(^|\.)11st\.co\.kr$/i,
+      checkoutPaths: [/\/pay\/OrderInfoAction\.tmall$/i],
+      paymentWords: KOREAN_PAYMENT_WORDS,
+      checkoutPaymentWords: KOREAN_ORDER_WORDS,
+      paymentSelectors: ["button#btnAccount.btn_order"],
+      // Verified against 11st's real order sheet (2026-08-02). The final
+      // payable amount is #FinalOrderPrice, while each product name is linked
+      // from .prd_name. This scraper deliberately accepts exactly one product:
+      // the supplied DOM does not expose a verified per-item price/quantity
+      // pairing yet, so treating a multi-product total as one item's price
+      // would produce a false analysis.
+      scrapeProduct() {
+        const productLinks = Array.from(
+          document.querySelectorAll('.prd_name a[href*="/products/"]'),
+        );
+        if (productLinks.length !== 1) return { name: null, price: null };
+
+        const link = productLinks[0];
+        const logBody = link.getAttribute("data-log-body") || "";
+        const loggedName = logBody.match(
+          /["']product_name["']\s*:\s*["']([^"']+)["']/,
+        )?.[1];
+        const directText = Array.from(link.childNodes || [])
+          .filter((node) => node.nodeType === 3)
+          .map((node) => node.textContent?.trim() || "")
+          .filter(Boolean)
+          .join(" ");
+        const name = (loggedName || directText).trim();
+        const priceText =
+          document.querySelector("#FinalOrderPrice")?.textContent || "";
+        const price = Number(priceText.replace(/[^\d]/g, ""));
+
+        return {
+          name: name || null,
+          price: price > 0 ? price : null,
+        };
+      },
+    },
+    {
       id: "amazon",
       name: "Amazon",
       hostname: /(^|\.)amazon\.com$/i,

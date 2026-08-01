@@ -30,6 +30,12 @@ const routeCases = [
     checkout: "https://www.29cm.co.kr/order/checkout",
   },
   {
+    id: "11st",
+    hostname: "buy.11st.co.kr",
+    checkout:
+      "https://buy.11st.co.kr/pay/OrderInfoAction.tmall?method=getOrderInfo",
+  },
+  {
     id: "amazon",
     hostname: "www.amazon.com",
     checkout: "https://www.amazon.com/gp/buy/spc/handlers/display.html",
@@ -77,6 +83,7 @@ test("loads the site config before the purchase guard on every host", () => {
     "https://*.coupang.com/*",
     "https://*.musinsa.com/*",
     "https://*.29cm.co.kr/*",
+    "https://*.11st.co.kr/*",
     "https://*.amazon.com/*",
     "https://*.kream.co.kr/*",
     "https://web.coupangeats.com/*",
@@ -107,6 +114,54 @@ test("recognizes Coupang's verified cart route and checkout control", () => {
   );
   assert.equal(coupang.cartCheckoutSelector, "a#btnPay.goPayment[role='button']");
   assert.equal(typeof coupang.scrapeCartItems, "function");
+});
+
+test("recognizes 11st's verified order sheet and final payment control", () => {
+  const elevenStreet = findSite("buy.11st.co.kr");
+
+  assert.equal(
+    matchesPath(
+      elevenStreet.checkoutPaths,
+      "https://buy.11st.co.kr/pay/OrderInfoAction.tmall?method=getOrderInfo",
+    ),
+    true,
+  );
+  assert.deepEqual(elevenStreet.paymentSelectors, ["button#btnAccount.btn_order"]);
+});
+
+test("scrapes a verified single-product 11st order without inventing item prices", () => {
+  const elevenStreet = findSite("buy.11st.co.kr");
+  const previousDocument = global.document;
+  const productLink = {
+    childNodes: [],
+    getAttribute(name) {
+      assert.equal(name, "data-log-body");
+      return "{'product_no':'9524725118','product_name':'[메가MGC커피] 치즈케이크 딸기요거트 크레페'}";
+    },
+  };
+
+  global.document = {
+    querySelectorAll(selector) {
+      assert.equal(selector, '.prd_name a[href*="/products/"]');
+      return [productLink];
+    },
+    querySelector(selector) {
+      assert.equal(selector, "#FinalOrderPrice");
+      return { textContent: "3,520" };
+    },
+  };
+
+  try {
+    assert.deepEqual(elevenStreet.scrapeProduct(), {
+      name: "[메가MGC커피] 치즈케이크 딸기요거트 크레페",
+      price: 3520,
+    });
+
+    global.document.querySelectorAll = () => [productLink, productLink];
+    assert.deepEqual(elevenStreet.scrapeProduct(), { name: null, price: null });
+  } finally {
+    global.document = previousDocument;
+  }
 });
 
 test("scrapes a selected Coupang cart row without mixing its fields", () => {
@@ -202,6 +257,7 @@ test("does not confuse browsing or history routes with checkout", () => {
     ["www.coupang.com", "https://www.coupang.com/vp/products/123"],
     ["www.musinsa.com", "https://www.musinsa.com/mypage/orders"],
     ["www.29cm.co.kr", "https://www.29cm.co.kr/order/cart"],
+    ["buy.11st.co.kr", "https://buy.11st.co.kr/order/list"],
     ["www.amazon.com", "https://www.amazon.com/gp/buyagain"],
     ["kream.co.kr", "https://kream.co.kr/my/buying"],
     ["web.coupangeats.com", "https://web.coupangeats.com/share?storeId=1"],
@@ -222,6 +278,7 @@ test("matches each site's final payment wording", () => {
   assert.equal(findSite("www.coupang.com").paymentWords.test("32,000원 결제하기"), true);
   assert.equal(findSite("www.musinsa.com").paymentWords.test("결제하기"), true);
   assert.equal(findSite("www.29cm.co.kr").paymentWords.test("주문 및 결제"), true);
+  assert.equal(findSite("buy.11st.co.kr").paymentWords.test("3,520원 결제하기"), true);
   assert.equal(
     findSite("www.amazon.com").paymentWords.test("Place your order"),
     true,
