@@ -17,6 +17,13 @@
     [/음식|간식|과자|음료|식품|식재료/i, "식비"],
   ];
 
+  const VERDICT_LABELS = {
+    PASS: "문제 없음",
+    WARN: "한 번 더 확인",
+    HOLD: "잠시 보류",
+    STRONG_HOLD: "강력 보류",
+  };
+
   function guessCategory(name) {
     if (!name) return "기타";
     for (const [pattern, category] of CATEGORY_KEYWORDS) {
