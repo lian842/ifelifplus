@@ -248,13 +248,17 @@ class QuestionOption(BaseModel):
 
 
 class Question(BaseModel):
-    """개입 팝업에서 사용자에게 던질 질문. 형식까지 에이전트가 정한다."""
+    """개입 팝업에서 사용자에게 던질 3개 객관식 + 1개 자유 입력 질문."""
 
-    format: Literal["choice", "text"]
+    format: Literal["choice"]
     text: str = Field(description="질문 문장. 고정 문구를 쓰지 말고 이 상품·이 이력에 맞게 쓴다")
-    options: list[QuestionOption] = Field(description="format='choice'일 때 2~4개. 'text'면 빈 배열")
-    allow_free_text: bool = Field(description="객관식이어도 직접 입력을 함께 허용할지")
-    free_text_placeholder: str = Field(description="자유 입력칸의 예시 문구. 없으면 빈 문자열")
+    options: list[QuestionOption] = Field(
+        min_length=3,
+        max_length=3,
+        description="서로 겹치지 않는 객관식 선택지 정확히 3개",
+    )
+    allow_free_text: Literal[True] = Field(description="세 선택지와 함께 자유 입력을 항상 허용한다")
+    free_text_placeholder: str = Field(description="네 번째 응답 방식인 자유 입력칸의 예시 문구")
     reason: str = Field(description="왜 이 형식을 골랐는지 한 문장. 심사위원에게 설계 의도를 보여주는 값")
 
 
@@ -373,7 +377,7 @@ async def classify(case: dict[str, Any], profile: dict[str, Any]) -> dict[str, A
 #
 # 이 단계의 목적은 정보 수집만이 아니다. 결제 버튼에서 손을 떼게 하는 것 자체가 개입이다.
 # 그래서 답하기 쉬워야 한다. 긴 서술을 요구하면 사용자는 아무거나 쓰고 넘어간다.
-# 형식(객관식/주관식)은 에이전트가 이 상품과 이 사람의 이력을 보고 정한다.
+# 선택지 내용은 에이전트가 이 상품과 이 사람의 이력을 보고 정한다.
 # --------------------------------------------------------------------------
 
 QUESTION_PROMPT = """\
@@ -383,10 +387,11 @@ QUESTION_PROMPT = """\
 1) 이 구매의 근거를 한 조각 확보한다.
 2) 결제 버튼에서 손을 떼게 한다. 답하기 쉬워야 손을 뗀다.
 
-## 형식 선택 (네가 정한다)
-- choice : 기본값. 이 상품에서 나올 법한 답이 몇 가지로 좁혀질 때.
-           선택지는 2~4개. 서로 겹치지 않게.
-- text   : 처음 보는 종류의 상품이라 선택지를 만들면 오히려 답을 왜곡할 때만.
+## 응답 형식 (반드시 지킨다)
+- format은 항상 choice다.
+- 서로 겹치지 않는 객관식 선택지를 정확히 3개 만든다.
+- allow_free_text는 항상 true다. 세 선택지에 답이 없을 때 사용자가 직접 쓸 수 있어야 한다.
+- free_text_placeholder는 이 상품에 맞는 짧은 예시 문장으로 만든다.
 
 ## 길이 제한
 - 질문은 답변에 필요한 맥락을 한 가지 포함한 자연스러운 한 문장으로 쓴다.
@@ -406,7 +411,7 @@ QUESTION_PROMPT = """\
 ## 금지
 - "정말 필요한가요?" 같은 죄책감을 유도하는 문장. 사용자는 강박적 구매 상태일 수 있다.
 - 정답이 뻔한 선택지("낭비인 것 같다" 같은 것). 사실을 얻지 못한다.
-- 5개 이상의 선택지. 읽는 데 시간이 걸리면 아무거나 누른다.
+- 선택지를 3개보다 적거나 많게 만드는 것.
 - 도구를 3개 넘게 부르지 마라. 이 단계는 빨라야 한다.
 
 ## 톤
@@ -428,11 +433,15 @@ def build_question_agent() -> Agent[Ctx]:
 
 
 DEFAULT_QUESTION = {
-    "format": "text",
-    "text": "왜 지금 사야 합니까?",
-    "options": [],
+    "format": "choice",
+    "text": "이번 구매를 결정한 가장 큰 이유는 무엇인가요?",
+    "options": [
+        {"id": "opt1", "label": "기존 제품을 대체하려고", "implies": "necessity"},
+        {"id": "opt2", "label": "지금 가격이 적절해서", "implies": "price_urgency"},
+        {"id": "opt3", "label": "구체적인 사용 계획이 있어서", "implies": "other"},
+    ],
     "allow_free_text": True,
-    "free_text_placeholder": "예: 다음 주 등산에 쓸 건데 기존 것은 용량이 부족해요",
+    "free_text_placeholder": "선택지에 없다면 직접 알려주세요",
     "reason": "질문 생성에 실패해 기본 질문으로 대체했습니다.",
 }
 
@@ -459,8 +468,8 @@ async def make_question(case: dict[str, Any], profile: dict[str, Any],
         await asyncio.wait_for(_pump(result, case["case_id"]), timeout=45)
         q: Question = result.final_output
         out = q.model_dump()
-        if q.format == "choice" and len(q.options) < 2:
-            out = DEFAULT_QUESTION | {"text": q.text or DEFAULT_QUESTION["text"]}
+        out["format"] = "choice"
+        out["allow_free_text"] = True
         events.emit("system", {"step": "question_design_done", "question": out},
                     case_id=case["case_id"])
         return out, None

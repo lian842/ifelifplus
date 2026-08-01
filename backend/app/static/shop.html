@@ -266,7 +266,7 @@ function renderQuestion(res) {
     ${freeText}
     <label class="yn"><input type="checkbox" id="wantAlt" checked>
       <span>${res.alternatives_prompt || '다른 가격이나 대안 상품을 찾아드릴까요?'}</span></label>
-    <p class="muted">질문 형식(${q.format === 'choice' ? '객관식' : '주관식'})은 에이전트가 정했습니다 — ${q.reason || ''}</p>
+    <p class="muted">에이전트가 객관식 3개와 자유 입력 1개를 이 구매 맥락에 맞게 설계했습니다 — ${q.reason || ''}</p>
     <div class="actions">
       <button class="primary" onclick="sendAnswer()">조사 시작</button>
       <button onclick="closeModal()">결제 취소</button>

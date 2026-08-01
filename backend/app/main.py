@@ -255,7 +255,7 @@ async def create_case(body: CaseIn) -> dict[str, Any]:
                     case_id=case["case_id"])
         return {**base, "verdict": "PASS", "price_check": price, "agent_error": error}
 
-    # challenge: 3단계 질문을 에이전트가 설계한다. 객관식/주관식도 에이전트가 정한다.
+    # challenge: 에이전트가 맥락에 맞는 객관식 3개를 설계하고 자유 입력 1개를 함께 준다.
     question, q_error = await challenger.make_question(case, profile, classification)
     case["question"] = question
     store.save_case(case)
