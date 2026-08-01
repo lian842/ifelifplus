@@ -129,6 +129,7 @@ async def create_case(body: CaseIn) -> dict[str, Any]:
         dwell = max(0, int((now - store.datetime.fromisoformat(detected_at)).total_seconds() // 60))
 
     product = body.product.model_dump()
+    parse_failed = not product.get("name") or not int(product.get("price") or 0)
     if not product.get("name"):
         product["name"] = "(상품 정보 추출 실패)"
 
@@ -149,53 +150,72 @@ async def create_case(body: CaseIn) -> dict[str, Any]:
         "verdict": None,
         "release_at": None,
         "resolved": False,
-        "parse_failed": not bool(body.product.name) or not bool(body.product.price),
+        "parse_failed": parse_failed,
     }
 
     events.emit("system", {
         "step": "case_created", "product": product, "dwell_minutes": dwell,
         "dark_patterns": case["dark_patterns"], "retry_of": case["retry_of"],
+        "parse_failed": parse_failed,
     }, case_id=case["case_id"])
+
+    # 처음 보는 쇼핑몰: 상품·가격을 못 읽었다. 없는 사실로 마찰을 걸지 않고,
+    # 못 읽었다는 사실만 정직하게 알린다. 조용히 통과시키지도 않는다.
+    if parse_failed:
+        case["verdict"] = "PASS"
+        case["resolved"] = True
+        case["gate"] = -1
+        store.save_case(case)
+        events.emit("system", {"step": "parse_failed_passthrough"}, case_id=case["case_id"])
+        return {
+            "case_id": case["case_id"],
+            "intervene": False,
+            "verdict": "PASS",
+            "gate": -1,
+            "parse_failed": True,
+            "message": "이 페이지에서 상품 정보를 추출하지 못했습니다. "
+                       "확인되지 않은 정보로 판단하지 않습니다. 결제를 막지 않습니다.",
+            "classification": None,
+            "budget": judge.budget_snapshot(case, profile),
+        }
 
     classification = await challenger.classify(case, profile)
     case["classification"] = classification
 
-    for gate_fn in (lambda: gates.gate0(classification),
-                    lambda: gates.gate1(case, profile, classification)):
-        decision = gate_fn()
-        if decision:
-            case["verdict"] = decision["verdict"]
-            case["resolved"] = True
-            case["gate"] = decision["gate"]
-            store.save_case(case)
-            events.emit("system", {"step": f"gate{decision['gate']}_pass", **decision},
-                        case_id=case["case_id"])
-            return {
-                "case_id": case["case_id"],
-                "intervene": False,
-                "verdict": "PASS",
-                "gate": decision["gate"],
-                "message": decision["reason"],
-                "classification": classification,
-                "budget": judge.budget_snapshot(case, profile),
-            }
-
+    mode = gates.decide_mode(case, profile, classification)
+    case["mode"] = mode
     store.save_case(case)
     snapshot = judge.budget_snapshot(case, profile)
-    events.emit("system", {"step": "gate2_enter", "budget": snapshot}, case_id=case["case_id"])
+    events.emit("system", {"step": "mode_decided", **mode, "budget": snapshot},
+                case_id=case["case_id"])
 
-    return {
+    base = {
         "case_id": case["case_id"],
-        "intervene": True,
-        "verdict": None,
-        "gate": 2,
+        "intervene": True,          # 어떤 구매도 그냥 통과시키지 않는다
+        "mode": mode["mode"],
+        "no_friction": mode["no_friction"],
+        "gate": mode["gate"],
+        "mode_reason": mode["reason"],
         "classification": classification,
         "budget": snapshot,
         "dark_patterns": case["dark_patterns"],
         "parse_failed": case["parse_failed"],
-        "question": "왜 지금 사야 합니까?",
         "override_stats": store.override_stats(body.profile_id),
     }
+
+    # price_only: 사용자에게 아무것도 묻지 않는다. 지금 바로 에이전트가 조사한다.
+    if mode["mode"] == "price_only":
+        price, ctx, error = await challenger.price_check(case, profile, classification)
+        case["price_check"] = price
+        case["agent_error"] = error
+        case["verdict"] = "PASS"
+        case["resolved"] = True
+        store.save_case(case)
+        events.emit("system", {"step": "price_only_done", "result": price, "error": error},
+                    case_id=case["case_id"])
+        return {**base, "verdict": "PASS", "price_check": price, "agent_error": error}
+
+    return {**base, "verdict": None, "question": "왜 지금 사야 합니까?"}
 
 
 # --------------------------------------------------------------------------

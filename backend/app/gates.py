@@ -1,9 +1,15 @@
-"""Gate 0 / Gate 1 — LLM을 부르기 전에 끝내는 결정론적 관문.
+"""Gate — 개입 여부가 아니라 **개입 방식**을 정하는 결정론적 분기.
 
-Gate 0 : 절대 개입 금지 (의약품·의료기기·건강 소모품). 통과가 아니라 '개입 없음'이다.
-Gate 1 : 이례성이 없으면 LLM 없이 즉시 PASS. 대부분의 구매가 여기서 끝나야 한다.
+이 에이전트는 어떤 구매도 그냥 통과시키지 않는다. 팝업은 항상 뜬다.
+다만 팝업이 하는 일이 다르다.
 
-여기서 걸러지지 않은 것만 Challenger Agent(Gate 2)로 간다.
+  price_only : 심문하지 않는다. 사용자 입력 0회. 에이전트가 곧바로 최저가·대안만 조사한다.
+               의약품, 생필품, 소액, 이례성 없는 구매가 여기 온다. 마찰은 절대 걸지 않는다.
+  challenge  : "왜 지금 사야 합니까?" 1회 입력을 받고 자율 조사 후 규칙 엔진이 판정한다.
+               마찰(보류)이 걸릴 수 있다.
+
+의약품에 마찰을 거는 것은 위험하다. 그래서 no_friction으로 잠근다.
+하지만 개입 자체를 포기하지는 않는다 — 같은 약이 더 싼 곳이 있다는 사실은 알려줄 수 있다.
 """
 
 from __future__ import annotations
@@ -110,54 +116,66 @@ def detect_dark_patterns(page_text: str | None) -> list[dict[str, Any]]:
 
 
 # --------------------------------------------------------------------------
-# Gate 0 / Gate 1
+# 개입 방식 분기
 # --------------------------------------------------------------------------
 
-def gate0(classification: dict[str, Any]) -> dict[str, Any] | None:
-    """의약품·의료 관련이면 개입 자체를 하지 않는다."""
-    if classification.get("is_medical"):
-        return {
-            "gate": 0,
-            "verdict": "PASS",
-            "intervene": False,
-            "reason": "건강·의료 관련 구매입니다. 개입하지 않습니다.",
-            "llm_used": classification.get("llm_used", False),
-        }
-    return None
-
-
-def gate1(case: dict[str, Any], profile: dict[str, Any], classification: dict[str, Any]) -> dict[str, Any] | None:
-    """이례성이 없으면 LLM을 부르지 않고 통과시킨다."""
+def decide_mode(case: dict[str, Any], profile: dict[str, Any],
+                classification: dict[str, Any]) -> dict[str, Any]:
+    """어떤 팝업을 띄울지 결정한다. '팝업을 띄울지'는 결정하지 않는다 — 항상 띄운다."""
     price = int(case["product"].get("price") or 0)
     free_budget = int(profile["monthly_free_budget"])
     remaining = free_budget - int(profile["spent_this_month"])
     dwell = int(case.get("dwell_minutes") or 0)
     same_cat_30d = classification.get("same_category_30d", 0)
 
-    if price <= TRIVIAL_PRICE and same_cat_30d == 0:
+    # 의약품 — 개입은 하되 마찰은 절대 금지. 건강 관련 결정을 지연시키지 않는다.
+    if classification.get("is_medical"):
         return {
-            "gate": 1,
-            "verdict": "PASS",
-            "intervene": False,
-            "reason": f"{price:,}원. 예산에 유의미한 영향이 없습니다.",
-            "llm_used": classification.get("llm_used", False),
+            "mode": "price_only",
+            "no_friction": True,
+            "gate": 0,
+            "reason": "건강·의료 관련 구매입니다. 구매를 지연시키지 않고 가격 정보만 확인합니다.",
         }
 
-    unusual = (
-        price > remaining
-        or price >= HIGH_VALUE_THRESHOLD
-        or price > free_budget * 0.05
-        or same_cat_30d > 0
-        or dwell < 1440
-        or bool(case.get("dark_patterns"))
-        or bool(case.get("retry_of"))
-    )
-    if not unusual:
+    unusual_reasons = []
+    if price > remaining:
+        unusual_reasons.append("잔여 예산 초과")
+    if price >= HIGH_VALUE_THRESHOLD:
+        unusual_reasons.append("고가 상품")
+    if price > free_budget * 0.05:
+        unusual_reasons.append("월 자유 예산의 5% 초과")
+    if same_cat_30d > 0:
+        unusual_reasons.append(f"최근 30일 내 같은 카테고리 구매 {same_cat_30d}건")
+    if dwell < 1440:
+        unusual_reasons.append(f"발견 후 {dwell}분 만에 결제")
+    if case.get("dark_patterns"):
+        unusual_reasons.append("페이지에서 다크패턴 탐지")
+    if case.get("retry_of"):
+        unusual_reasons.append("보류 판정 후 재시도")
+
+    # 소액은 심문할 가치가 없다. 그래도 최저가는 확인해준다.
+    if price <= TRIVIAL_PRICE and same_cat_30d == 0:
         return {
+            "mode": "price_only",
+            "no_friction": True,
             "gate": 1,
-            "verdict": "PASS",
-            "intervene": False,
-            "reason": "예산 내이고, 최근 유사 구매가 없으며, 24시간 이상 검토한 구매입니다.",
-            "llm_used": classification.get("llm_used", False),
+            "reason": f"{price:,}원. 예산에 유의미한 영향이 없어 가격 정보만 확인합니다.",
         }
-    return None
+
+    if not unusual_reasons:
+        return {
+            "mode": "price_only",
+            "no_friction": True,
+            "gate": 1,
+            "reason": "예산 내이고, 최근 유사 구매가 없으며, 24시간 이상 검토한 구매입니다. "
+                      "심문하지 않고 더 싼 곳만 확인합니다.",
+        }
+
+    return {
+        "mode": "challenge",
+        # 생필품은 심문은 하되 지연은 시키지 않는다. 대안 제시까지가 한계다.
+        "no_friction": bool(classification.get("is_essential")),
+        "gate": 2,
+        "reason": "이례적인 신호가 있습니다: " + ", ".join(unusual_reasons),
+        "unusual_reasons": unusual_reasons,
+    }

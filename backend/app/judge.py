@@ -19,6 +19,7 @@ from . import store
 SCORING: dict[str, int] = {
     # 가산
     "budget_exceeded": +3,
+    "budget_exceeded_severe": +4,
     "same_category_3plus_owned": +2,
     "similar_purchase_last_30d": +2,
     "dwell_under_30min": +2,
@@ -39,6 +40,7 @@ SCORING: dict[str, int] = {
 
 LABELS: dict[str, str] = {
     "budget_exceeded": "이번 달 자유 예산 초과",
+    "budget_exceeded_severe": "초과액이 한 달 자유 예산보다 큼",
     "same_category_3plus_owned": "동일 카테고리 3개 이상 보유",
     "similar_purchase_last_30d": "최근 30일 내 유사 구매",
     "dwell_under_30min": "상품 발견 후 30분 이내 결제",
@@ -88,6 +90,7 @@ def collect_signals(
     return {
         # --- 결정론 (에이전트가 뭐라 하든 바뀌지 않는다) ---
         "budget_exceeded": after < 0,
+        "budget_exceeded_severe": after < -free_budget,
         "same_category_3plus_owned": classification.get("owned_count", 0) >= 3,
         "similar_purchase_last_30d": classification.get("same_category_30d", 0) > 0,
         "dwell_under_30min": dwell < 30,
@@ -126,11 +129,24 @@ def judge(
         if score >= lo and (hi is None or score <= hi):
             verdict = name
 
-    # 생필품·식료품은 지연시키지 않는다. 대안 제시까지만 허용한다.
+    # 하한(floor): 한 달 자유 예산보다 크게 초과하는 구매는 감산 항목으로 상쇄되지 않는다.
+    # 잘 검토된 고가 구매라도 최소한 한 번은 멈춰 세운다.
     capped_reason = None
-    if signals["essential_category"] and verdict in ("HOLD", "STRONG_HOLD"):
+    if signals["budget_exceeded_severe"] and verdict in ("PASS", "WARN"):
+        verdict = "HOLD"
+        capped_reason = ("초과액이 한 달 자유 예산보다 큽니다. "
+                         "감산 항목이 있어도 최소 한 번은 보류합니다.")
+
+    # 상한(cap): 마찰 금지 대상은 어떤 점수가 나와도 지연시키지 않는다.
+    # 의약품·건강 관련(안전), 생필품·식료품(생활 필수). 하한 규칙보다 우선한다.
+    no_friction = bool(case.get("mode", {}).get("no_friction")) or signals["essential_category"]
+    if no_friction and verdict in ("HOLD", "STRONG_HOLD"):
         verdict = "WARN"
-        capped_reason = "생필품으로 분류되어 지연 없이 대안 정보만 제공합니다."
+        capped_reason = (
+            "건강·의료 관련 구매로 분류되어 지연 없이 정보만 제공합니다."
+            if classification.get("is_medical")
+            else "생필품으로 분류되어 지연 없이 대안 정보만 제공합니다."
+        )
 
     release_at = None
     hold_minutes = HOLD_MINUTES.get(verdict)

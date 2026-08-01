@@ -120,6 +120,21 @@ class Findings(BaseModel):
     follow_up_question: str | None = Field(description="가장 약한 주장 하나에 대한 되물음. 없으면 null")
 
 
+class PriceCheck(BaseModel):
+    """price_only 모드의 출력. 심문하지 않고 가격·대안만 본다."""
+
+    searched: bool = Field(description="실제로 검색을 수행했는가")
+    cheaper_found: bool = Field(description="현재 가격보다 싼 곳을 확인했는가. 미확인이면 false")
+    best_price: int = Field(description="확인된 최저가. 확인 못 했으면 0")
+    seller: str = Field(description="그 판매처 이름. 없으면 빈 문자열")
+    source_url: str = Field(description="근거 URL. 없으면 빈 문자열")
+    saving: int = Field(description="현재 가격 대비 절약액. 없으면 0")
+    structural_alternative: str = Field(
+        description="반복 구매 소모품일 때의 구조적 대안과 손익분기. 해당 없으면 빈 문자열"
+    )
+    note: str = Field(description="사용자에게 보여줄 2문장 이내 요약. 못 찾았으면 못 찾았다고 쓴다")
+
+
 class Classification(BaseModel):
     category: str = Field(description="영문 소문자 카테고리 슬러그. 예: tumbler, water, laptop")
     is_medical: bool = Field(description="의약품·의료기기·건강 소모품인가")
@@ -262,6 +277,81 @@ async def investigate(case: dict[str, Any], profile: dict[str, Any],
     except Exception as exc:  # noqa: BLE001 - 라이브 데모에서 절대 죽지 않는다
         msg = f"{type(exc).__name__}: {exc}"
         events.emit("system", {"step": "agent_run_failed", "error": msg}, case_id=case["case_id"])
+        return None, ctx, msg
+
+
+# --------------------------------------------------------------------------
+# price_only 모드 — 심문하지 않는다. 사용자 입력 0회.
+# 팝업이 뜨자마자 에이전트가 스스로 조사를 시작하고, 마찰은 걸지 않는다.
+# --------------------------------------------------------------------------
+
+PRICE_ONLY_PROMPT = """\
+너는 결제 직전에 딱 하나만 확인하는 조사관이다: **이 사람이 더 싸게 살 수 있는가.**
+
+이 구매는 심문 대상이 아니다. 구매를 막지 마라. 지연시키지 마라.
+"정말 필요한가요" 같은 질문을 하지 마라. 사용자는 아무 답변도 하지 않았고, 물어볼 수도 없다.
+
+## 절차
+1. get_purchase_history로 반복 구매 소모품인지 먼저 확인한다.
+   - 반복 구매라면 find_alternatives(mode='longterm_substitute')로 손익분기 계산 근거를 받고,
+     web_search로 실제 대체재 가격을 찾아 손익분기 개월수를 직접 계산한다.
+   - 일회성이라면 find_alternatives(mode='cheaper') 후 web_search로 다른 판매처 가격을 확인한다.
+2. 검색 결과가 현재 상품과 같은 물건인지 확인하라. 규격·용량이 다르면 비교하지 마라.
+3. 더 싼 곳을 찾지 못했으면 cheaper_found=false로 두고 그렇게 말한다.
+   "최저가입니다"라고 단정하지 마라. 확인하지 못한 것과 최저가인 것은 다르다.
+
+## 의약품·건강 관련 상품일 때
+가격만 말한다. 복약·효능·대체 성분·구매 필요성에 대해 어떤 언급도 하지 마라.
+그건 우리 영역이 아니고, 잘못 개입하면 사람이 다친다.
+
+## 톤
+note는 2문장 이내. 사실만. 한국어. 인격 언급 금지.
+"""
+
+
+def build_price_agent() -> Agent[Ctx]:
+    return Agent[Ctx](
+        name="Ulysses Price Check",
+        model=MODEL,
+        instructions=PRICE_ONLY_PROMPT,
+        tools=[*INVESTIGATION_TOOLS, WebSearchTool()],
+        output_type=PriceCheck,
+        model_settings=ModelSettings(tool_choice="auto"),
+    )
+
+
+async def price_check(case: dict[str, Any], profile: dict[str, Any],
+                      classification: dict[str, Any]) -> tuple[dict[str, Any] | None, Ctx, str | None]:
+    """사용자 입력 없이 즉시 실행되는 최저가·대안 조사."""
+    ctx = Ctx(case=case, profile=profile, classification=classification)
+    p = case["product"]
+    prompt = f"""\
+[구매 사건 {case['case_id']} · price_only 모드 · 사용자 입력 없음]
+상품: {p.get('name')}
+현재 가격: {p.get('price'):,}원
+카테고리: {classification.get('category')}
+판매처: {p.get('url') or '알 수 없음'}
+할인 문구: {p.get('discount_text') or '없음'}
+의약품 여부: {classification.get('is_medical')}
+
+더 싸게 살 수 있는지 지금 확인하라.
+"""
+    events.emit("system", {
+        "step": "price_check_start", "model": MODEL,
+        "note": "사용자 입력 0회. 팝업 표시와 동시에 에이전트가 스스로 시작했다.",
+        "input_preview": prompt,
+    }, case_id=case["case_id"])
+
+    try:
+        result = Runner.run_streamed(build_price_agent(), input=prompt, context=ctx, max_turns=10)
+        await asyncio.wait_for(_pump(result, case["case_id"]), timeout=RUN_TIMEOUT_S)
+        out: PriceCheck = result.final_output
+        events.emit("system", {"step": "price_check_done",
+                               "tool_calls": _count_tool_calls(result)}, case_id=case["case_id"])
+        return out.model_dump(), ctx, None
+    except Exception as exc:  # noqa: BLE001
+        msg = f"{type(exc).__name__}: {exc}"
+        events.emit("system", {"step": "price_check_failed", "error": msg}, case_id=case["case_id"])
         return None, ctx, msg
 
 

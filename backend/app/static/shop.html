@@ -150,7 +150,9 @@ async function post(path, body) {
 
 // ── 결제 버튼 = 트리거 ────────────────────────────────────────────
 document.getElementById('pay').onclick = async () => {
-  openModal(`<div class="kicker">ULYSSES</div><h2>확인 중…</h2><p class="spinner">Gate 0 / Gate 1 판정 중 (LLM 호출 없음)</p>`);
+  openModal(`<div class="kicker">ULYSSES · 결제 직전 개입</div><h2>확인 중…</h2>
+    <p class="spinner">개입 방식을 정하고, 필요하면 에이전트가 곧바로 조사를 시작합니다.<br>
+    <a href="/viewer" target="_blank">RAW 스트림 뷰어</a></p>`);
   let res;
   try {
     res = await post('/api/case', {
@@ -161,9 +163,37 @@ document.getElementById('pay').onclick = async () => {
   } catch (e) { return openModal(errBox('백엔드에 연결하지 못했습니다.', e)); }
 
   caseId = res.case_id;
-  if (!res.intervene) return renderPass(res);
+  if (res.parse_failed && !res.intervene) return renderPass(res);
+  if (res.mode === 'price_only') return renderPriceOnly(res);
   renderQuestion(res);
 };
+
+// price_only — 심문하지 않는다. 사용자 입력 0회로 이미 조사가 끝나 있다.
+function renderPriceOnly(res) {
+  const pc = res.price_check;
+  let body;
+  if (!pc) {
+    body = `<p>가격을 확인하지 못했습니다.</p>${res.agent_error ? `<p class="muted"><code class="small">${res.agent_error}</code></p>` : ''}`;
+  } else if (pc.cheaper_found) {
+    body = `<div class="verdict v-WARN">더 싼 곳이 있습니다 · ${won(pc.best_price)}${pc.saving ? ` (${won(pc.saving)} 절약)` : ''}</div>
+      <p>${pc.note}</p>
+      ${pc.seller ? `<p class="muted">판매처: ${pc.seller}${pc.source_url ? ` · <a href="${pc.source_url}" target="_blank">근거</a>` : ''}</p>` : ''}`;
+  } else {
+    body = `<div class="verdict v-PASS">더 싼 곳을 확인하지 못했습니다</div>
+      <p>${pc.note}</p>
+      <p class="muted">확인하지 못한 것이지, 최저가라고 단정하는 것이 아닙니다.</p>`;
+  }
+  const structural = pc && pc.structural_alternative
+    ? `<p class="muted">구조적 대안</p><p>${pc.structural_alternative}</p>` : '';
+  openModal(`
+    <div class="kicker">ULYSSES · 심문 없음 · 마찰 없음</div>
+    <h2>${res.classification && res.classification.is_medical ? '가격만 확인했습니다' : '구매를 막지 않습니다'}</h2>
+    <p class="muted">${res.mode_reason}</p>
+    ${body}
+    ${structural}
+    <p class="muted">사용자 입력 0회. 팝업이 뜨는 동안 에이전트가 스스로 조사했습니다.</p>
+    <div class="actions"><button class="primary" onclick="resolveCase('accept')">구매 계속</button></div>`);
+}
 
 function openModal(html) { document.getElementById('modal').innerHTML = html; document.getElementById('ov').classList.add('on'); }
 function closeModal() { document.getElementById('ov').classList.remove('on'); }
@@ -171,11 +201,12 @@ const errBox = (m,e) => `<div class="kicker">ULYSSES</div><h2>${m}</h2><p class=
   <div class="actions"><button class="primary" onclick="closeModal()">닫기</button></div>`;
 
 function renderPass(res) {
+  const failed = res.parse_failed;
   openModal(`
-    <div class="kicker">ULYSSES · GATE ${res.gate}</div>
-    <h2>확인했습니다. 구매하세요.</h2>
+    <div class="kicker">ULYSSES · ${failed ? '상품 정보 추출 실패' : 'GATE ' + res.gate}</div>
+    <h2>${failed ? '판단할 근거가 없습니다.' : '확인했습니다. 구매하세요.'}</h2>
     <p>${res.message}</p>
-    <p class="muted">LLM을 호출하지 않았습니다. 이 구매는 이례적이지 않습니다.</p>
+    <p class="muted">${failed ? '확인하지 못한 것을 추측하지 않습니다.' : 'LLM을 호출하지 않았습니다. 이 구매는 이례적이지 않습니다.'}</p>
     <div class="actions"><button class="primary" onclick="closeModal()">구매 계속</button></div>`);
 }
 
