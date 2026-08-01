@@ -187,6 +187,8 @@ html.agent24-dialog-open { overflow: hidden !important; }
   text-shadow: 0 1px 0 rgba(255, 255, 255, .8);
 }
 #agent24-purchase-guard .agent24-balance {
+  position: relative;
+  top: -12px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -194,7 +196,6 @@ html.agent24-dialog-open { overflow: hidden !important; }
 }
 #agent24-purchase-guard .agent24-amount-number { letter-spacing: -.038em; }
 #agent24-purchase-guard .agent24-amount-unit { margin-left: .055em; letter-spacing: -.045em; }
-#agent24-purchase-guard .agent24-dialog[data-mood="negative"] .agent24-balance h1 { color: #343a3e; }
 #agent24-purchase-guard .agent24-concept-label {
   margin: 0 0 8px;
   color: rgba(68, 85, 94, .48);
@@ -218,10 +219,6 @@ html.agent24-dialog-open { overflow: hidden !important; }
   color: rgba(49, 62, 69, .76);
   font-weight: 570;
 }
-#agent24-purchase-guard .agent24-dialog[data-balance="remaining"] .agent24-concept-result strong { color: rgba(49, 62, 69, .68); }
-#agent24-purchase-guard .agent24-dialog[data-balance="zero"] .agent24-balance h1 { color: #42494d; }
-#agent24-purchase-guard .agent24-dialog[data-balance="zero"] .agent24-concept-result strong { color: rgba(70, 79, 84, .7); }
-#agent24-purchase-guard .agent24-dialog[data-balance="shortage"] .agent24-concept-result strong { color: rgba(49, 62, 69, .78); }
 #agent24-purchase-guard[data-concept="b"] .agent24-balance h1 { font-size: clamp(38px, 4.8vw, 50px); letter-spacing: -.05em; }
 #agent24-purchase-guard[data-concept="d"] .agent24-concept-label { letter-spacing: .08em; }
 #agent24-purchase-guard[data-concept="d"] .agent24-orbit-result { position: relative; display: inline-flex; align-items: center; gap: 8px; }
@@ -287,7 +284,7 @@ html.agent24-dialog-open { overflow: hidden !important; }
     0 -8px 22px rgba(168, 180, 217, .34),
     -16px 2px 28px rgba(168, 180, 217, .2),
     18px 4px 30px rgba(168, 180, 217, .22),
-    0 16px 34px rgba(168, 180, 217, .16),
+    0 11px 25px rgba(168, 180, 217, .1),
     0 0 0 1px rgba(168, 180, 217, .34),
     inset 0 1px 0 #fff;
   backdrop-filter: none;
@@ -297,7 +294,7 @@ html.agent24-dialog-open { overflow: hidden !important; }
 #agent24-purchase-guard .agent24-prompt::before {
   position: absolute;
   z-index: -1;
-  inset: -76px -74px -82px;
+  inset: -76px -74px -62px;
   border-radius: 46%;
   background:
     radial-gradient(ellipse 13% 38% at 22% 50%, rgba(162, 220, 239, .68) 0%, rgba(172, 211, 235, .32) 34%, transparent 66%),
@@ -325,7 +322,7 @@ html.agent24-dialog-open { overflow: hidden !important; }
     0 -9px 24px rgba(168, 180, 217, .4),
     -17px 2px 30px rgba(168, 180, 217, .24),
     19px 4px 32px rgba(168, 180, 217, .26),
-    0 17px 36px rgba(168, 180, 217, .18),
+    0 12px 28px rgba(168, 180, 217, .12),
     0 0 0 1px rgba(168, 180, 217, .5),
     inset 0 1px 0 #fff;
 }
