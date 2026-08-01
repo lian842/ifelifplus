@@ -63,32 +63,48 @@ html.agent24-dialog-open { overflow: hidden !important; }
 }
 
 #agent24-purchase-guard .agent24-atmosphere,
-#agent24-purchase-guard .agent24-atmosphere i,
-#agent24-purchase-guard .agent24-float { position: absolute; pointer-events: none; }
+#agent24-purchase-guard .agent24-atmosphere i { position: absolute; pointer-events: none; }
 #agent24-purchase-guard .agent24-atmosphere { display: none; inset: 0; overflow: hidden; }
 #agent24-purchase-guard .agent24-atmosphere i { border-radius: 50%; filter: blur(34px); opacity: .5; }
 #agent24-purchase-guard .agent24-atmosphere i:first-child { width: 300px; height: 260px; left: -100px; top: -110px; background: rgba(118, 213, 219, .34); }
 #agent24-purchase-guard .agent24-atmosphere i:last-child { width: 330px; height: 280px; right: -110px; bottom: -130px; background: rgba(134, 171, 230, .32); }
 
-#agent24-purchase-guard .agent24-float {
+#agent24-purchase-guard .agent24-brand {
   top: 66px;
   left: 50%;
-  width: 72px;
-  height: 72px;
+  position: absolute;
+  width: 270px;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
   transform: translateX(-50%);
-  filter: drop-shadow(0 13px 18px rgba(67, 79, 86, .12));
-  animation: agent24-float-reveal 1.28s ease both, agent24-float 5.8s ease-in-out 1.28s infinite;
   transition: top 700ms cubic-bezier(.2, .8, .2, 1), filter 700ms ease, transform 700ms ease;
+  pointer-events: none;
+}
+#agent24-purchase-guard .agent24-float {
+  width: 58px;
+  height: 58px;
+  flex: 0 0 58px;
+  filter: drop-shadow(0 13px 18px rgba(67, 79, 86, .12));
+  animation: agent24-brand-roll 820ms cubic-bezier(.2, .8, .2, 1) 1.18s both;
 }
 #agent24-purchase-guard .agent24-float svg { width: 100%; height: 100%; display: block; }
+#agent24-purchase-guard .agent24-brand span {
+  color: rgba(58, 72, 79, .64);
+  font-size: 14px;
+  font-weight: 560;
+  letter-spacing: -.025em;
+  white-space: nowrap;
+  animation: agent24-brand-copy 520ms cubic-bezier(.2, .8, .2, 1) 1.72s both;
+}
 
-#agent24-purchase-guard .agent24-dialog[data-mood="negative"] .agent24-float {
+#agent24-purchase-guard .agent24-dialog[data-mood="negative"] .agent24-brand {
   top: 70px;
-  transform: translateX(-50%) scale(.98);
   filter: drop-shadow(0 16px 22px rgba(45, 52, 56, .16));
 }
-#agent24-purchase-guard .agent24-dialog[data-mood="thinking"] .agent24-float { top: 82px; animation: agent24-think 2.2s ease-in-out infinite; }
-#agent24-purchase-guard .agent24-dialog[data-mood="result"] .agent24-float { top: 48px; transform: translateX(-50%) scale(.82); opacity: .82; }
+#agent24-purchase-guard .agent24-dialog[data-mood="thinking"] .agent24-brand { top: 72px; }
+#agent24-purchase-guard .agent24-dialog[data-mood="result"] .agent24-brand { top: 48px; transform: translateX(-50%) scale(.88); opacity: .82; }
 
 #agent24-purchase-guard .agent24-icon-button {
   position: absolute;
@@ -188,8 +204,10 @@ html.agent24-dialog-open { overflow: hidden !important; }
   letter-spacing: -.01em;
 }
 #agent24-purchase-guard .agent24-concept-result {
+  position: relative;
+  top: 22px;
   min-height: 18px;
-  margin: 26px 0 0;
+  margin: 0 0 22px;
   color: rgba(68, 85, 94, .48);
   font-size: 13px;
   font-weight: 450;
@@ -262,15 +280,15 @@ html.agent24-dialog-open { overflow: hidden !important; }
   margin: 12px auto 0;
   padding: 7px 8px 7px 18px;
   z-index: 1;
-  border: 1px solid rgba(231, 234, 247, .98);
+  border: 1px solid rgba(168, 180, 217, .72);
   border-radius: 17px;
   background: #fff;
   box-shadow:
-    0 -9px 28px rgba(168, 180, 217, .3),
-    -20px 4px 38px rgba(190, 199, 226, .2),
-    24px 6px 40px rgba(151, 166, 210, .19),
-    0 24px 62px rgba(168, 180, 217, .11),
-    0 0 0 1px rgba(168, 180, 217, .17),
+    0 -11px 34px rgba(168, 180, 217, .52),
+    -24px 5px 46px rgba(190, 213, 232, .38),
+    28px 7px 48px rgba(172, 158, 216, .36),
+    0 28px 70px rgba(168, 180, 217, .2),
+    0 0 0 1px rgba(168, 180, 217, .42),
     inset 0 1px 0 #fff;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -282,10 +300,10 @@ html.agent24-dialog-open { overflow: hidden !important; }
   inset: -210px -240px -145px;
   border-radius: 0;
   background:
-    radial-gradient(ellipse 48% 43% at 44% 49%, rgba(168, 180, 217, .56) 0%, rgba(176, 187, 220, .3) 39%, rgba(168, 180, 217, .075) 70%, transparent 100%),
-    radial-gradient(ellipse 37% 43% at 12% 53%, rgba(190, 213, 232, .38) 0%, rgba(185, 204, 230, .19) 48%, rgba(183, 198, 226, .05) 73%, transparent 100%),
-    radial-gradient(ellipse 40% 39% at 91% 44%, rgba(188, 175, 218, .36) 0%, rgba(179, 171, 216, .18) 49%, rgba(168, 180, 217, .045) 74%, transparent 100%);
-  filter: blur(28px);
+    radial-gradient(ellipse 48% 43% at 44% 49%, rgba(168, 180, 217, .86) 0%, rgba(176, 187, 220, .48) 39%, rgba(168, 180, 217, .13) 70%, transparent 100%),
+    radial-gradient(ellipse 37% 43% at 12% 53%, rgba(180, 215, 236, .64) 0%, rgba(185, 204, 230, .32) 48%, rgba(183, 198, 226, .09) 73%, transparent 100%),
+    radial-gradient(ellipse 40% 39% at 91% 44%, rgba(186, 164, 226, .62) 0%, rgba(179, 171, 216, .3) 49%, rgba(168, 180, 217, .08) 74%, transparent 100%);
+  filter: blur(27px);
   content: "";
   pointer-events: none;
 }
@@ -301,13 +319,13 @@ html.agent24-dialog-open { overflow: hidden !important; }
 #agent24-purchase-guard .agent24-prompt > * { position: relative; z-index: 1; }
 #agent24-purchase-guard .agent24-prompt:focus-within {
   background: #fff;
-  border-color: rgba(216, 221, 240, .98);
+  border-color: rgba(168, 180, 217, .9);
   box-shadow:
-    0 -9px 27px rgba(168, 180, 217, .25),
-    -18px 3px 34px rgba(190, 199, 226, .14),
-    22px 5px 36px rgba(151, 166, 210, .13),
-    0 22px 58px rgba(168, 180, 217, .075),
-    0 0 0 1px rgba(168, 180, 217, .13),
+    0 -12px 36px rgba(168, 180, 217, .58),
+    -24px 5px 46px rgba(180, 215, 236, .42),
+    28px 7px 48px rgba(186, 164, 226, .4),
+    0 28px 72px rgba(168, 180, 217, .23),
+    0 0 0 1px rgba(168, 180, 217, .54),
     inset 0 1px 0 #fff;
 }
 #agent24-purchase-guard .agent24-prompt textarea,
@@ -430,13 +448,17 @@ html.agent24-dialog-open { overflow: hidden !important; }
   to { opacity: 1; transform: translateY(0) scale(1); border-radius: 32px; }
 }
 @keyframes agent24-interface-in { from { opacity: 0; transform: translateY(8px); } }
-@keyframes agent24-float-reveal {
-  0%, 92% { visibility: hidden; opacity: 0; }
-  93%, 100% { visibility: visible; opacity: 1; }
+@keyframes agent24-brand-roll {
+  0% { opacity: 0; transform: translateX(106px) rotate(0deg) scale(.9); }
+  12% { opacity: 1; }
+  100% { opacity: 1; transform: translateX(0) rotate(-360deg) scale(1); }
+}
+@keyframes agent24-brand-copy {
+  from { opacity: 0; clip-path: inset(0 100% 0 0); transform: translateX(-8px); }
+  to { opacity: 1; clip-path: inset(0 0 0 0); transform: translateX(0); }
 }
 @keyframes agent24-content-in { from { opacity: 0; transform: translateY(8px); } }
 @keyframes agent24-marquee { to { transform: translateX(-50%); } }
-@keyframes agent24-float { 0%, 100% { transform: translateX(-50%) translateY(0) rotate(-1deg); } 50% { transform: translateX(-50%) translateY(-7px) rotate(1deg); } }
 @keyframes agent24-think { 0%, 100% { transform: translateX(-50%) translateY(0) scale(.92); } 50% { transform: translateX(-50%) translateY(-9px) scale(1); } }
 
 @media (max-width: 680px) {
@@ -456,5 +478,6 @@ html.agent24-dialog-open { overflow: hidden !important; }
 @media (prefers-reduced-motion: reduce) {
   #agent24-purchase-guard *, #agent24-purchase-guard *::before, #agent24-purchase-guard *::after { animation: none !important; transition: none !important; }
   #agent24-purchase-guard .agent24-intro-logo { display: none !important; }
-  #agent24-purchase-guard .agent24-float { visibility: visible !important; opacity: 1 !important; }
+  #agent24-purchase-guard .agent24-float,
+  #agent24-purchase-guard .agent24-brand span { visibility: visible !important; opacity: 1 !important; transform: none !important; clip-path: none !important; }
 }

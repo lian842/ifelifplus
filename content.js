@@ -95,6 +95,10 @@
     return `<svg viewBox="0 0 340 340" aria-hidden="true"><rect width="340" height="340" rx="72" fill="#fffdf8"/><circle fill="#D4D4D4" cx="170" cy="170" r="104"/><path transform="rotate(-40 107 140)" fill="#F5823A" d="M107 140L140.96 122.96L150.2 157.04Z"/></svg>`;
   }
 
+  function lianBareMark() {
+    return `<svg viewBox="0 0 340 340" aria-hidden="true"><circle fill="#D4D4D4" cx="170" cy="170" r="104"/><path transform="rotate(-40 107 140)" fill="#F5823A" d="M107 140L140.96 122.96L150.2 157.04Z"/></svg>`;
+  }
+
   // ---- Dialog shell -------------------------------------------------
 
   function buildDialog() {
@@ -110,7 +114,10 @@
       <div class="agent24-intro-logo" aria-hidden="true">${lianMark()}</div>
       <section class="agent24-dialog" role="dialog" aria-modal="true" aria-labelledby="agent24-title">
         <div class="agent24-atmosphere" aria-hidden="true"><i></i><i></i></div>
-        <div class="agent24-float" aria-hidden="true">${lianMark()}</div>
+        <div class="agent24-brand" aria-hidden="true">
+          <div class="agent24-float">${lianBareMark()}</div>
+          <span>현명한 소비를 도와드려요</span>
+        </div>
         <button class="agent24-icon-button" type="button" data-agent24-dismiss aria-label="닫기">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>
         </button>
