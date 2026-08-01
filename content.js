@@ -3,7 +3,7 @@
 
   const ROOT_ID = "agent24-purchase-guard";
   const BACKEND_URL = "http://localhost:8787";
-  const { findSite, matchesPaymentText } = globalThis.Agent24Sites;
+  const { findSite, matchesPath, matchesPaymentText } = globalThis.Agent24Sites;
   const currentSite = findSite(location.hostname);
 
   if (!currentSite) {
@@ -148,6 +148,54 @@
 
   const BYPASS_KEY = "agent24_bypass_until";
   const BYPASS_WINDOW_MS = 5 * 60 * 1000;
+  const CART_ITEMS_KEY = "agent24_coupang_cart_items";
+  const CART_ITEMS_TTL_MS = 10 * 60 * 1000;
+
+  function isCartPage() {
+    return Boolean(
+      currentSite.cartPaths &&
+        matchesPath(currentSite.cartPaths, location.href, location.href),
+    );
+  }
+
+  function isCartCheckoutControl(control) {
+    return Boolean(
+      isCartPage() &&
+        currentSite.cartCheckoutSelector &&
+        control?.matches(currentSite.cartCheckoutSelector),
+    );
+  }
+
+  async function saveCartItems() {
+    const items = currentSite.scrapeCartItems?.() || [];
+    if (!items.length) {
+      await chrome.storage.local.remove(CART_ITEMS_KEY);
+      return;
+    }
+    await chrome.storage.local.set({
+      [CART_ITEMS_KEY]: { savedAt: Date.now(), items },
+    });
+  }
+
+  async function loadCartItems() {
+    if (currentSite.id !== "coupang" || isCartPage()) return [];
+    try {
+      const stored = (await chrome.storage.local.get(CART_ITEMS_KEY))[CART_ITEMS_KEY];
+      if (
+        !stored ||
+        Date.now() - Number(stored.savedAt) > CART_ITEMS_TTL_MS ||
+        !Array.isArray(stored.items)
+      ) {
+        await chrome.storage.local.remove(CART_ITEMS_KEY);
+        return [];
+      }
+      return stored.items.filter(
+        (item) => item?.name && Number(item.price) > 0 && Number(item.quantity) > 0,
+      );
+    } catch {
+      return [];
+    }
+  }
 
   function armBypass() {
     try {
@@ -168,6 +216,7 @@
 
   function proceedWithOriginal() {
     armBypass();
+    chrome.storage.local.remove(CART_ITEMS_KEY).catch(() => {});
     resumeAction?.();
     closeDialog();
   }
@@ -244,7 +293,12 @@
   }
 
   function escapeAttr(str) {
-    return String(str ?? "").replace(/"/g, "&quot;");
+    return String(str ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
   // ---- /api/observe — fired once at page load, independent of the checkout click -------------------------------------------------
@@ -252,6 +306,9 @@
   // Fire-and-forget; failures are ignored.
 
   function fireObserveOnce() {
+    if (isCartPage()) {
+      return;
+    }
     let attempts = 0;
     const tryObserve = () => {
       attempts += 1;
@@ -319,10 +376,27 @@
 
   // ---- Screen 0: confirm scraped (or manually entered) product info -------------------------------------------------
 
-  function renderProductConfirmScreen() {
+  async function renderProductConfirmScreen() {
     let scraped = { name: null, price: null };
+    let cartNotice = "";
+    const cartItems = await loadCartItems();
+    if (cartItems.length) {
+      const highest = cartItems.reduce((best, item) =>
+        Number(item.price) > Number(best.price) ? item : best,
+      );
+      scraped = { name: highest.name, price: Number(highest.price) };
+      const totalQuantity = cartItems.reduce(
+        (sum, item) => sum + Number(item.quantity || 1),
+        0,
+      );
+      if (cartItems.length > 1 || totalQuantity > 1) {
+        cartNotice = `장바구니에 총 ${totalQuantity}개 상품이 있어요. 그중 가장 비싼 ${highest.name} (${Number(highest.price).toLocaleString()}원)을 기준으로 판단합니다.`;
+      }
+    }
     try {
-      scraped = currentSite.scrapeProduct?.() || scraped;
+      if (!cartItems.length) {
+        scraped = currentSite.scrapeProduct?.() || scraped;
+      }
     } catch {
       // scraping is best-effort; fall through to blank/manual fields
     }
@@ -330,6 +404,7 @@
     dialogElements.screen.innerHTML = `
       <p class="agent24-label">AGENT24 · ${currentSite.name}</p>
       <h2 id="agent24-title">결제하려는 상품이 맞나요?</h2>
+      ${cartNotice ? `<p class="agent24-hint">${escapeAttr(cartNotice)}</p>` : ""}
       <p class="agent24-hint">자동으로 읽어온 값이에요. 다르면 직접 고쳐주세요.</p>
       <label class="agent24-field">상품명
         <input type="text" id="agent24-product-name" value="${scraped.name ? escapeAttr(scraped.name) : ""}" />
@@ -671,10 +746,6 @@
   // ---- Interception (unchanged) -------------------------------------------------
 
   function interceptClick(event) {
-    if (isBypassActive()) {
-      return;
-    }
-
     const control = getInteractiveControl(event.target);
     if (!control) {
       return;
@@ -685,6 +756,19 @@
       if (control.form instanceof HTMLFormElement) {
         allowedForms.add(control.form);
       }
+      return;
+    }
+
+    if (isCartCheckoutControl(control)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      saveCartItems()
+        .catch(() => {})
+        .finally(() => replayControl(control));
+      return;
+    }
+
+    if (isBypassActive()) {
       return;
     }
 

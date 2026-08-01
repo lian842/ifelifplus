@@ -3,6 +3,7 @@
   "name": "Agent24 Purchase Guard",
   "version": "0.4.0",
   "description": "지원 쇼핑몰과 배달 서비스의 최종 결제 버튼을 누를 때 한 번 더 확인합니다.",
+  "permissions": ["storage"],
   "host_permissions": ["http://localhost:8000/*", "http://localhost:8787/*"],
   "content_scripts": [
     {
