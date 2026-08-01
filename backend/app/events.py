@@ -19,7 +19,9 @@ from typing import Any
 
 from .store import iso, now
 
-_MAX_BUFFER = 500
+# 한 번의 조사가 토큰 delta만으로 수백 건을 만든다. 버퍼가 작으면 tool_call이
+# 밀려나서 뷰어를 새로고침했을 때 정작 봐야 할 이벤트가 사라진다.
+_MAX_BUFFER = 8000
 
 _subscribers: set[asyncio.Queue] = set()
 _buffer: deque[dict[str, Any]] = deque(maxlen=_MAX_BUFFER)

@@ -19,10 +19,11 @@ from pydantic import BaseModel, Field
 from . import events, gates, store
 from .tools import INVESTIGATION_TOOLS, Ctx
 
-MODEL = os.getenv("ULYSSES_MODEL", "gpt-4.1")
-CLASSIFIER_MODEL = os.getenv("ULYSSES_CLASSIFIER_MODEL", "gpt-4.1-mini")
+# 조사 본체는 luna. 분류는 판단이 단순해서 더 작은 모델로 충분하다.
+MODEL = os.getenv("ULYSSES_MODEL", "gpt-5.6-luna")
+CLASSIFIER_MODEL = os.getenv("ULYSSES_CLASSIFIER_MODEL", "gpt-5.4-mini")
 MAX_TURNS = int(os.getenv("ULYSSES_MAX_TURNS", "14"))
-RUN_TIMEOUT_S = float(os.getenv("ULYSSES_TIMEOUT", "75"))
+RUN_TIMEOUT_S = float(os.getenv("ULYSSES_TIMEOUT", "120"))
 
 
 # --------------------------------------------------------------------------
@@ -52,6 +53,14 @@ SYSTEM_PROMPT = """\
    - uniqueness     → check_price_claim (희소성 검증)
    불필요한 호출은 비용이며 설계 실패다.
 
+2-1. 다만 claim type과 무관하게 **항상 확인해야 하는 것**이 하나 있다.
+   Findings의 no_owned_substitute는 규칙 엔진이 점수 계산에 직접 쓴다.
+   get_owned_items를 호출하지 않고 이 값을 적어서는 안 된다.
+   사용자가 필요성을 주장하지 않았어도, 같은 용도의 물건을 이미 갖고 있다는 사실은
+   이 구매의 가장 중요한 맥락이다. 예를 들어 "한정판이라 지금 아니면 못 산다"는
+   희소성 주장이지만, 같은 용도의 물건이 5개 있다면 그 숫자를 함께 제시해야 한다.
+   보유품이 있으면 마지막 사용 시점까지 확인해 summary에 수치로 넣어라.
+
 3. 대안 탐색 방식을 스스로 결정하라.
    get_purchase_history 결과를 먼저 확인한 뒤 mode를 정한다.
    - 반복 구매 소모품이면 mode='longterm_substitute' (구조적 대안)
@@ -73,6 +82,8 @@ SYSTEM_PROMPT = """\
 6. 종료 시점을 스스로 판단하라.
    근거가 충분하면 즉시 조사를 끝내고 판정 단계로 넘긴다.
    도구를 더 부를 이유가 없으면 부르지 마라.
+   단, **시작한 계산은 끝내라.** find_alternatives로 손익분기 계산 근거를 받아놓고
+   숫자를 내지 않은 채 끝내는 것은 조사 실패다.
 
 7. 인격을 공격하지 마라.
    "또 사시네요", "낭비입니다" 같은 표현을 절대 쓰지 마라.
@@ -84,9 +95,14 @@ SYSTEM_PROMPT = """\
    즉시 이렇게 말하고 종료한다: "확인했습니다. 구매하세요."
    무조건 반대하는 것은 이 에이전트의 실패다.
 
-9. 기억할 가치가 있는 관찰은 write_memory로 직접 기록하라.
-   단순 로그가 아니라, 다음 심문에 쓸 수 있는 패턴만 기록한다.
-   매번 기록하지 마라. 새로운 패턴일 때만 기록한다.
+9. 조사를 마치기 전에 한 번 판단하라: 이번에 새로 알게 된 패턴이 있는가?
+   있으면 write_memory로 직접 기록한다. 없으면 기록하지 않는다. 판단은 네가 한다.
+   기록할 가치가 있는 것의 예:
+   - 특정 단어("한정판", "오늘만")가 나올 때 이 사용자가 보이는 반응
+   - 같은 근거가 반복해서 등장하는 것 ("떨어져서"가 3번째다)
+   - 이전 관찰이 이번에 맞았거나 틀렸다는 확인
+   단순 사실("생수를 샀다")은 기록하지 마라. 그건 구매 이력이 이미 갖고 있다.
+   read_memory로 읽은 내용과 중복되면 기록하지 마라.
 
 ## 처음 보는 상황
 상품 정보가 부족하거나 카테고리를 모르면, 아는 범위에서만 판단하고

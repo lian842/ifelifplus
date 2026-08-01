@@ -212,18 +212,30 @@ def find_alternatives(
         spent = sum(r["price"] for r in last_90)
         span = max(r["days_ago"] for r in last_90) or 1
         annual = int(spent * 365 / span)
+        monthly = int(annual / 12)
         return {
             "mode": mode,
             "found": True,
             "repeat_purchases_90d": len(last_90),
             "spent_last_90_days": spent,
             "current_annual_cost": annual,
-            "monthly_cost": int(annual / 12),
+            "monthly_cost": monthly,
             "breakeven_formula": "손익분기(개월) = 대체재 초기비용 / (현재 월 지출 - 대체재 월 비용)",
+            "worked_example": (
+                f"현재 월 지출은 {monthly:,}원이다. 대체재가 초기비용 200,000원 + 월 10,000원이라면 "
+                f"손익분기 = 200000 / ({monthly:,} - 10000) 개월."
+            ),
             "instruction": (
-                "web_search로 이 카테고리의 구조적 대체재(정기배송/렌탈/대용량/재사용 제품)의 "
-                "실제 가격을 찾아, 위 공식에 넣어 손익분기 개월수를 직접 계산하라. "
-                "찾지 못하면 found=False로 보고하라."
+                "지금부터 네가 끝내야 하는 계산이다. 시작했으면 완료하라.\n"
+                "1) web_search로 이 카테고리의 구조적 대체재 실제 가격을 찾아라. "
+                "검색어는 상품이 아니라 '대체 방식'으로 짜라 "
+                "(예: 생수→'정수기 렌탈 월 요금', 커피→'홈카페 캡슐머신 가격', "
+                "건전지→'충전지 세트 가격', 물티슈→'행주 정기구독').\n"
+                "2) 첫 검색이 비면 검색어를 바꿔 한 번 더 시도하라. 두 번 실패하면 그때 포기한다.\n"
+                "3) 초기비용과 월 비용을 얻었으면 위 공식에 넣어 손익분기 개월수를 **직접 숫자로** 계산하고, "
+                "연간 절약액도 계산해 alternative_summary에 넣어라.\n"
+                "4) 대체재 월 비용이 현재 월 지출보다 크면 손익분기는 없다. 그렇게 정직하게 보고하라.\n"
+                "가격을 못 찾았으면 found=False. 추정 가격을 지어내지 마라."
             ),
         }
 

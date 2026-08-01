@@ -150,9 +150,8 @@ async function post(path, body) {
 
 // ── 결제 버튼 = 트리거 ────────────────────────────────────────────
 document.getElementById('pay').onclick = async () => {
-  openModal(`<div class="kicker">ULYSSES · 결제 직전 개입</div><h2>확인 중…</h2>
-    <p class="spinner">개입 방식을 정하고, 필요하면 에이전트가 곧바로 조사를 시작합니다.<br>
-    <a href="/viewer" target="_blank">RAW 스트림 뷰어</a></p>`);
+  caseId = null;
+  startLive('결제를 잠시 멈췄습니다');
   let res;
   try {
     res = await post('/api/case', {
@@ -160,7 +159,8 @@ document.getElementById('pay').onclick = async () => {
       dwell_minutes: Number(document.getElementById('dwell').value),
       payment_method_bnpl: document.getElementById('bnpl').checked,
     });
-  } catch (e) { return openModal(errBox('백엔드에 연결하지 못했습니다.', e)); }
+  } catch (e) { stopLive(); return openModal(errBox('백엔드에 연결하지 못했습니다.', e)); }
+  stopLive();
 
   caseId = res.case_id;
   if (res.parse_failed && !res.intervene) return renderPass(res);
@@ -236,14 +236,49 @@ function renderQuestion(res) {
     </div>`);
 }
 
+// 조사는 20~40초가 걸린다. 그 시간을 침묵으로 두지 않고, 에이전트가 어떤 도구를
+// 어떤 순서로 고르는지 그대로 보여준다. 기다림이 곧 데모가 된다.
+let liveES = null;
+function startLive(title) {
+  openModal(`<div class="kicker">ULYSSES · 자율 조사 진행 중</div><h2>${title}</h2>
+    <p class="muted">에이전트가 필요한 도구를 스스로 고르고 있습니다. 사용자 입력은 더 이상 받지 않습니다.</p>
+    <ul class="bd" id="live"></ul>
+    <p class="muted"><a href="/viewer" target="_blank">RAW 스트림 뷰어</a>에서 원본 이벤트를 확인하세요.</p>`);
+  if (liveES) liveES.close();
+  liveES = new EventSource('/api/stream');
+  liveES.onmessage = (m) => {
+    let e; try { e = JSON.parse(m.data); } catch { return; }
+    // caseId는 /api/case 응답이 와야 알 수 있다. price_only는 그 응답 안에서 조사가
+    // 끝나므로, 아직 모를 때는 필터하지 않는다(데모에서 동시 조사는 없다).
+    if (caseId && e.case_id !== caseId) return;
+    const ul = document.getElementById('live');
+    if (!ul) return;
+    let line = null;
+    if (e.channel === 'tool_call') {
+      const r = e.raw || {};
+      const name = r.name || (r.type === 'web_search_call' ? 'web_search' : r.type);
+      let arg = '';
+      try { arg = r.arguments ? Object.values(JSON.parse(r.arguments)).join(', ') : ''; } catch { arg = ''; }
+      line = `<b>${name}</b>${arg ? ` <span class="muted">${arg}</span>` : ''}`;
+    } else if (e.channel === 'tool_result') {
+      const prev = ul.lastElementChild;
+      if (prev && !prev.dataset.done) { prev.dataset.done = '1'; prev.innerHTML += ' <span class="muted">✓</span>'; }
+      return;
+    } else if (e.channel === 'system' && e.raw && e.raw.step === 'verdict') {
+      line = `<b>규칙 엔진 판정</b> <span class="muted">${e.raw.verdict} · 점수 ${e.raw.risk_score}</span>`;
+    }
+    if (line) { const li = document.createElement('li'); li.innerHTML = line; ul.appendChild(li); }
+  };
+}
+function stopLive() { if (liveES) { liveES.close(); liveES = null; } }
+
 async function sendAnswer() {
   const reason = document.getElementById('reason').value;
-  openModal(`<div class="kicker">ULYSSES</div><h2>조사 중…</h2>
-    <p class="spinner">에이전트가 주장을 분해하고 필요한 도구를 스스로 고르는 중입니다.<br>
-    <a href="/viewer" target="_blank">RAW 스트림 뷰어</a>에서 tool_call을 실시간으로 확인하세요.</p>`);
+  startLive('조사 중…');
   let res;
   try { res = await post(`/api/case/${caseId}/answer`, { reason }); }
-  catch (e) { return openModal(errBox('조사에 실패했습니다.', e)); }
+  catch (e) { stopLive(); return openModal(errBox('조사에 실패했습니다.', e)); }
+  stopLive();
   renderVerdict(res);
 }
 

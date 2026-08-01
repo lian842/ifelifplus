@@ -73,9 +73,15 @@ def looks_medical(name: str | None, hint: str | None = None) -> bool:
     return any(w in text for w in MEDICAL_KEYWORDS)
 
 
+# 브랜드명만 적힌 상품("제주 삼다수")은 키워드에 안 걸린다. 카테고리에서도 파생시킨다.
+ESSENTIAL_CATEGORIES = {"water", "food"}
+
+
 def looks_essential(name: str | None, hint: str | None = None) -> bool:
     text = _norm(name, hint)
-    return any(w in text for w in ESSENTIAL_KEYWORDS)
+    if any(w in text for w in ESSENTIAL_KEYWORDS):
+        return True
+    return guess_category(name, hint) in ESSENTIAL_CATEGORIES
 
 
 # --------------------------------------------------------------------------

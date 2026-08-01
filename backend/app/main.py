@@ -358,6 +358,18 @@ async def scoring() -> dict[str, Any]:
 # 원본 스트림
 # --------------------------------------------------------------------------
 
+@app.get("/api/events")
+async def events_buffer(case_id: str | None = None, channel: str | None = None) -> dict[str, Any]:
+    """스트림 버퍼 조회. 뷰어를 새로 붙이지 않고도 어떤 도구가 어떤 순서로 불렸는지 확인한다."""
+    out = events.replay()
+    if case_id:
+        out = [e for e in out if e.get("case_id") == case_id]
+    if channel:
+        wanted = set(channel.split(","))
+        out = [e for e in out if e["channel"] in wanted]
+    return {"count": len(out), "events": out}
+
+
 @app.get("/api/stream")
 async def stream() -> StreamingResponse:
     async def gen():
