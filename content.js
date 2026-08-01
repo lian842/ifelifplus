@@ -32,6 +32,8 @@
   let resumeAction = null;
   let previouslyFocused = null;
   let wizard = null; // { caseId, items, currentIndex, decisions }
+  let initialReason = "";
+  let activeBudget = null;
 
   function getControlText(control) {
     return [
@@ -80,7 +82,24 @@
     return isPaymentControl(submitter);
   }
 
-  // ---- Dialog shell (unchanged) -------------------------------------------------
+  function formatWon(value) {
+    return `${new Intl.NumberFormat("ko-KR").format(Number(value) || 0)}원`;
+  }
+
+  function formatBalanceAmount(value) {
+    const number = new Intl.NumberFormat("ko-KR").format(Math.abs(Number(value) || 0));
+    return `<span class="agent24-amount-number">${number}</span><span class="agent24-amount-unit">원</span>`;
+  }
+
+  function lianMark() {
+    return `<svg viewBox="0 0 340 340" aria-hidden="true"><rect width="340" height="340" rx="72" fill="#fffdf8"/><circle fill="#D4D4D4" cx="170" cy="170" r="104"/><path transform="rotate(-40 107 140)" fill="#F5823A" d="M107 140L140.96 122.96L150.2 157.04Z"/></svg>`;
+  }
+
+  function lianBareMark() {
+    return `<svg viewBox="0 0 340 340" aria-hidden="true"><circle fill="#D4D4D4" cx="170" cy="170" r="104"/><path transform="rotate(-40 107 140)" fill="#F5823A" d="M107 140L140.96 122.96L150.2 157.04Z"/></svg>`;
+  }
+
+  // ---- Dialog shell -------------------------------------------------
 
   function buildDialog() {
     if (dialogElements) {
@@ -91,22 +110,30 @@
     root.id = ROOT_ID;
     root.hidden = true;
     root.innerHTML = `
-      <div class="agent24-backdrop" data-agent24-cancel></div>
-      <section
-        class="agent24-dialog"
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="agent24-title"
-      >
-        <div class="agent24-accent" aria-hidden="true"></div>
-        <div class="agent24-content" id="agent24-screen"></div>
-      </section>
-    `;
+      <div class="agent24-backdrop"></div>
+      <div class="agent24-intro-logo" aria-hidden="true">${lianMark()}</div>
+      <section class="agent24-dialog" role="dialog" aria-modal="true" aria-labelledby="agent24-title">
+        <div class="agent24-atmosphere" aria-hidden="true"><i></i><i></i></div>
+        <div class="agent24-brand" aria-hidden="true">
+          <div class="agent24-float">${lianBareMark()}</div>
+          <span>현명한 소비를 도와드려요</span>
+        </div>
+        <button class="agent24-icon-button" type="button" data-agent24-dismiss aria-label="닫기">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>
+        </button>
+        <main class="agent24-main" id="agent24-screen"></main>
+        <div class="agent24-live" aria-live="polite" aria-atomic="true"></div>
+      </section>`;
 
-    root.querySelector(".agent24-backdrop").addEventListener("click", () => closeDialog());
+    root.querySelector("[data-agent24-dismiss]").addEventListener("click", () => closeDialog());
     document.documentElement.append(root);
 
-    dialogElements = { root, screen: root.querySelector("#agent24-screen") };
+    dialogElements = {
+      root,
+      dialog: root.querySelector(".agent24-dialog"),
+      screen: root.querySelector("#agent24-screen"),
+      live: root.querySelector(".agent24-live"),
+    };
     return dialogElements;
   }
 
@@ -135,6 +162,8 @@
     previouslyFocused = null;
     resumeAction = null;
     wizard = null;
+    initialReason = "";
+    activeBudget = null;
   }
 
   // ---- Cross-page-navigation bypass -------------------------------------------------
@@ -398,87 +427,119 @@
     return { page_text, dom_signals: { preselected_inputs, countdown_timers } };
   }
 
-  // ---- Screen 0: confirm scraped (or manually entered) product info -------------------------------------------------
-
-  async function renderProductConfirmScreen() {
-    let scraped = { name: null, price: null };
-    let cartNotice = "";
-    const { items: cartItems, itemCount } = await loadCartItems();
-    if (cartItems.length) {
-      const totalQuantity =
-        itemCount ??
-        cartItems.reduce((sum, item) => sum + Number(item.quantity || 1), 0);
-      cartNotice = `장바구니의 총 ${totalQuantity}개 상품을 하나씩 모두 판단합니다.`;
-    }
+  async function loadActiveBudget() {
     try {
-      if (!cartItems.length) {
-        scraped = currentSite.scrapeProduct?.() || scraped;
+      const response = await fetch(`${BACKEND_URL}/api/profiles`);
+      if (!response.ok) throw new Error(`profiles returned ${response.status}`);
+      const data = await response.json();
+      const profile = data.profiles?.find((candidate) => candidate.profile_id === data.default);
+      if (profile) {
+        return {
+          remaining: Number(profile.remaining),
+          monthlyFreeBudget: Number(profile.monthly_free_budget),
+        };
       }
     } catch {
-      // scraping is best-effort; fall through to blank/manual fields
+      // The visual shell remains usable with demo memory while the local backend starts.
     }
+    return { remaining: 820000, monthlyFreeBudget: 820000 };
+  }
 
-    const fieldsHtml = cartItems.length
-      ? cartItems
-          .map(
-            (item, index) => `
-              <div class="agent24-cart-item">
-                <label class="agent24-field">상품 ${index + 1}
-                  <input type="text" data-agent24-cart-name value="${escapeAttr(item.name)}" />
-                </label>
-                <label class="agent24-field">개당 가격(원)
-                  <input type="number" data-agent24-cart-price value="${Number(item.price)}" />
-                </label>
-                <input type="hidden" data-agent24-cart-quantity value="${Number(item.quantity) || 1}" />
-              </div>
-            `,
-          )
-          .join("")
-      : `
-        <label class="agent24-field">상품명
-          <input type="text" id="agent24-product-name" value="${scraped.name ? escapeAttr(scraped.name) : ""}" />
-        </label>
-        <label class="agent24-field">가격(원)
-          <input type="number" id="agent24-product-price" value="${scraped.price ?? ""}" />
-        </label>
-      `;
+  async function readCheckoutItems() {
+    const { items: cartItems } = await loadCartItems();
+    if (cartItems.length) return cartItems;
 
+    try {
+      const item = currentSite.scrapeProduct?.();
+      if (item?.name && Number(item.price) > 0) {
+        return [{ name: item.name, price: Number(item.price), quantity: 1 }];
+      }
+    } catch {
+      // The explicit error state below is safer than inventing a checkout amount.
+    }
+    return [];
+  }
+
+  function renderExtractionFailure() {
+    dialogElements.dialog.dataset.mood = "waiting";
     dialogElements.screen.innerHTML = `
-      <p class="agent24-label">AGENT24 · ${currentSite.name}</p>
-      <h2 id="agent24-title">결제하려는 상품${cartItems.length > 1 ? "들이" : "이"} 맞나요?</h2>
-      ${cartNotice ? `<p class="agent24-hint">${escapeAttr(cartNotice)}</p>` : ""}
-      <p class="agent24-hint">자동으로 읽어온 값이에요. 다르면 직접 고쳐주세요.</p>
-      ${fieldsHtml}
-      <div class="agent24-actions">
-        <button type="button" class="agent24-button agent24-button-secondary" id="agent24-product-cancel">취소</button>
-        <button type="button" class="agent24-button agent24-button-primary" id="agent24-product-continue">확인</button>
-      </div>
-    `;
-
-    document.getElementById("agent24-product-cancel").onclick = () => closeDialog();
-    document.getElementById("agent24-product-continue").onclick = async () => {
-      const items = cartItems.length
-        ? Array.from(dialogElements.screen.querySelectorAll(".agent24-cart-item")).map(
-            (row) => ({
-              name: row.querySelector("[data-agent24-cart-name]").value.trim(),
-              price: Number(row.querySelector("[data-agent24-cart-price]").value),
-              quantity: Number(row.querySelector("[data-agent24-cart-quantity]").value) || 1,
-            }),
-          )
-        : [
-            {
-              name: document.getElementById("agent24-product-name").value.trim(),
-              price: Number(document.getElementById("agent24-product-price").value),
-              quantity: 1,
-            },
-          ];
-      if (items.some((item) => !item.name || !item.price || item.price <= 0)) return;
-      await beginCaseQueue(items);
-    };
+      <div class="agent24-empty">
+        <p class="agent24-kicker">상품 정보를 읽지 못했어요</p>
+        <h1 id="agent24-title">확인되지 않은 금액으로<br>판단하지 않을게요.</h1>
+        <button type="button" class="agent24-main-action" id="agent24-extraction-retry">다시 확인 <span>→</span></button>
+        <button type="button" class="agent24-quiet-action" id="agent24-extraction-continue">그냥 구매할게요</button>
+      </div>`;
+    document.getElementById("agent24-extraction-retry").onclick = () => renderPurchaseContextScreen();
+    document.getElementById("agent24-extraction-continue").onclick = () => proceedWithOriginal();
     focusFirst();
   }
 
-  // ---- /api/case — the checkout-click trigger, branches 3 ways -------------------------------------------------
+  async function renderPurchaseContextScreen() {
+    dialogElements.dialog.dataset.mood = "waiting";
+    const [items, budget] = await Promise.all([readCheckoutItems(), loadActiveBudget()]);
+    if (!items.length) {
+      renderExtractionFailure();
+      return;
+    }
+
+    activeBudget = budget;
+    const total = items.reduce(
+      (sum, item) => sum + Number(item.price) * Number(item.quantity || 1),
+      0,
+    );
+    const after = budget.remaining - total;
+    const balanceMessage = after < 0
+      ? "이 구매에는 이만큼 더 필요해요"
+      : after === 0
+        ? "이 구매로 이번 달 여유금액을 모두 써요"
+        : "이 구매 후에는 이만큼만 남아요";
+    const ticker = items
+      .map((item) => `<span>${escapeAttr(item.name)} · ${formatWon(Number(item.price) * Number(item.quantity || 1))}</span>`)
+      .join("");
+
+    dialogElements.dialog.dataset.mood = after < 0
+      ? "negative"
+      : after < budget.remaining * 0.25
+        ? "tight"
+        : "calm";
+    dialogElements.dialog.dataset.balance = after < 0
+      ? "shortage"
+      : after === 0
+        ? "zero"
+        : "remaining";
+    dialogElements.screen.innerHTML = `
+      <div class="agent24-context">
+        <section class="agent24-balance">
+          <p class="agent24-concept-label">이번 달 여유금액 · ${formatWon(budget.remaining)}</p>
+          <h1 id="agent24-title" aria-label="${formatWon(Math.abs(after))}">${formatBalanceAmount(after)}</h1>
+          <p class="agent24-concept-result"><strong>${balanceMessage}</strong></p>
+        </section>
+        <div class="agent24-purchase-line" aria-label="구매 상품과 가격">
+          <div class="agent24-purchase-track">
+            <div class="agent24-purchase-group">${ticker}</div>
+            <div class="agent24-purchase-group" aria-hidden="true">${ticker}</div>
+          </div>
+        </div>
+        <div class="agent24-prompt">
+          <textarea id="agent24-initial-reason" rows="1" maxlength="220" aria-label="구매 이유" placeholder="왜 이 상품을 사고 싶나요?"></textarea>
+          <button type="button" id="agent24-start-case" aria-label="계속" disabled><span>→</span></button>
+        </div>
+        <button type="button" class="agent24-quiet-action" id="agent24-context-continue">그냥 구매할게요</button>
+      </div>`;
+
+    const reason = document.getElementById("agent24-initial-reason");
+    const start = document.getElementById("agent24-start-case");
+    reason.addEventListener("input", () => {
+      start.disabled = reason.value.trim().length === 0;
+    });
+    start.onclick = () => {
+      initialReason = reason.value.trim();
+      if (initialReason) beginCaseQueue(items);
+    };
+    document.getElementById("agent24-context-continue").onclick = () => proceedWithOriginal();
+    focusFirst();
+  }
+
 
   async function beginCaseQueue(items) {
     wizard = { caseId: null, items, currentIndex: 0, decisions: [] };
@@ -489,10 +550,17 @@
     const item = wizard.items[wizard.currentIndex];
     const name = item.name;
     const price = Number(item.price) * Number(item.quantity || 1);
-    dialogElements.screen.innerHTML = `<p>확인하는 중입니다...</p>`;
+    dialogElements.dialog.dataset.mood = "thinking";
+    dialogElements.screen.innerHTML = `
+      <div class="agent24-analysis-wrap">
+        <p class="agent24-kicker">가격과 조건을 맞춰보는 중</p>
+        <h1 id="agent24-title">더 나은 선택을<br>살펴보고 있어요</h1>
+        <p class="agent24-analysis-line">상품 정보를 정리하고 있어요</p>
+      </div>`;
     const laterLabelTimer = setTimeout(() => {
       if (dialogElements?.screen) {
-        dialogElements.screen.innerHTML = `<p>상품 분석 중입니다.</p>`;
+        const line = dialogElements.screen.querySelector(".agent24-analysis-line");
+        if (line) line.textContent = "소비 기록과 예산을 함께 보고 있어요";
       }
     }, 1500);
 
@@ -611,48 +679,28 @@
       free_text_placeholder: "",
     };
 
-    const optionsHtml =
-      q.format === "choice"
-        ? `
-      <div class="agent24-options">
-        ${q.options
-          .map(
-            (opt) => `
+    const optionsHtml = q.format === "choice"
+      ? `<div class="agent24-options">${q.options.map((opt) => `
           <label class="agent24-option">
-            <input type="checkbox" name="agent24-option" value="${escapeAttr(opt.id)}" />
-            ${escapeAttr(opt.label)}
-          </label>
-        `,
-          )
-          .join("")}
-      </div>
-    `
-        : "";
+            <input type="radio" name="agent24-option" value="${escapeAttr(opt.id)}" />
+            <span>${escapeAttr(opt.label)}</span><i>→</i>
+          </label>`).join("")}</div>`
+      : "";
 
     const freeTextNeeded = q.format === "text" || q.allow_free_text;
 
+    dialogElements.dialog.dataset.mood = "calm";
     dialogElements.screen.innerHTML = `
-      <p class="agent24-label">AGENT24 · 결제 직전 개입</p>
-      <h2 id="agent24-title">${escapeAttr(q.text)}</h2>
-      ${caseProgressHtml()}
-      ${renderBudgetBlock(result.budget)}
-      ${optionsHtml}
-      ${
-        freeTextNeeded
-          ? `<label class="agent24-field">${q.format === "text" ? "" : "또는 직접 적어주세요"}
-        <textarea id="agent24-reason" rows="2" placeholder="${escapeAttr(q.free_text_placeholder || "간단히 적어주세요")}"></textarea>
-      </label>`
-          : ""
-      }
-      <label class="agent24-yesno">
-        <input type="checkbox" id="agent24-want-alt" checked />
-        ${escapeAttr(result.alternatives_prompt || "다른 가격이나 대안 상품을 찾아드릴까요?")}
-      </label>
-      <div class="agent24-actions">
-        <button type="button" class="agent24-button agent24-button-secondary" id="agent24-question-cancel">결제 취소</button>
-        <button type="button" class="agent24-button agent24-button-primary" id="agent24-question-continue" disabled>조사 시작</button>
-      </div>
-    `;
+      <div class="agent24-interview-wrap">
+        <p class="agent24-kicker">짧은 인터뷰</p>
+        <h1 id="agent24-title">${escapeAttr(q.text)}</h1>
+        ${optionsHtml}
+        ${freeTextNeeded ? `<div class="agent24-prompt agent24-interview-prompt">
+          <textarea id="agent24-reason" rows="1" maxlength="220" placeholder="${escapeAttr(q.free_text_placeholder || "조금 더 알려주세요")}">${escapeAttr(initialReason)}</textarea>
+        </div>` : ""}
+        <button type="button" class="agent24-main-action" id="agent24-question-continue" disabled>더 나은 선택 찾아보기 <span>→</span></button>
+        <button type="button" class="agent24-quiet-action" id="agent24-question-cancel">그냥 구매할게요</button>
+      </div>`;
 
     const continueBtn = document.getElementById("agent24-question-continue");
     const textarea = document.getElementById("agent24-reason");
@@ -671,8 +719,7 @@
     continueBtn.onclick = () => {
       const selected = checkboxes.filter((cb) => cb.checked).map((cb) => cb.value);
       const reason = textarea ? textarea.value.trim() : "";
-      const wantAlt = document.getElementById("agent24-want-alt").checked;
-      submitAnswer(selected, reason, wantAlt);
+      submitAnswer(selected, reason, true);
     };
     focusFirst();
   }
@@ -688,19 +735,23 @@
   ];
 
   function renderInvestigatingScreen() {
+    dialogElements.dialog.dataset.mood = "thinking";
     dialogElements.screen.innerHTML = `
-      <p class="agent24-label">AGENT24 · 자율 조사 진행 중</p>
-      <h2 id="agent24-title">플래닝 모드</h2>
-      ${caseProgressHtml()}
-      <p id="agent24-investigating-line">${INVESTIGATING_LINES[0]}</p>
-      <p class="agent24-hint" id="agent24-investigating-elapsed">0초 경과</p>
-    `;
+      <div class="agent24-analysis-wrap">
+        <p class="agent24-kicker">당신에게 맞는 조건을 보는 중</p>
+        <h1 id="agent24-title">더 나은 선택을<br>살펴보고 있어요</h1>
+        <article class="agent24-tip-card">
+          <div><span>지금 확인하는 것</span><em id="agent24-investigating-elapsed">0초</em></div>
+          <h2 id="agent24-investigating-line">${INVESTIGATING_LINES[0]}</h2>
+          <p>가격뿐 아니라 실제 구매 조건과 지금의 여유금액을 함께 확인해요.</p>
+        </article>
+      </div>`;
     let elapsed = 0;
     let lineIndex = 0;
     investigatingTimer = setInterval(() => {
       elapsed += 1;
       const elapsedEl = document.getElementById("agent24-investigating-elapsed");
-      if (elapsedEl) elapsedEl.textContent = `${elapsed}초 경과`;
+      if (elapsedEl) elapsedEl.textContent = `${elapsed}초`;
       if (elapsed % 6 === 0) {
         lineIndex = (lineIndex + 1) % INVESTIGATING_LINES.length;
         const lineEl = document.getElementById("agent24-investigating-line");
@@ -937,7 +988,7 @@
     event.stopImmediatePropagation();
     resumeAction = () => replayControl(control);
     openDialog();
-    renderProductConfirmScreen();
+    renderPurchaseContextScreen();
   }
 
   function interceptSubmit(event) {
@@ -963,7 +1014,7 @@
     event.stopImmediatePropagation();
     resumeAction = () => replayForm(form, event.submitter);
     openDialog();
-    renderProductConfirmScreen();
+    renderPurchaseContextScreen();
   }
 
   function replayControl(control) {
