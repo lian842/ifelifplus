@@ -29,6 +29,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 from . import autopilot, challenger, events, gates, judge, profiler, sites, store  # noqa: E402
 
 STATIC = Path(__file__).resolve().parent / "static"
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 app = FastAPI(title="Ulysses — 충동구매 방어 에이전트")
 app.add_middleware(
@@ -561,12 +562,41 @@ async def shop() -> FileResponse:
     return FileResponse(STATIC / "shop.html")
 
 
+@app.get("/ui-board")
+async def ui_board() -> FileResponse:
+    """개발용: 실제 확장 스타일로 모든 활성 화면을 한 번에 비교한다."""
+    return FileResponse(STATIC / "ui-board.html")
+
+
+@app.get("/ui-preview")
+async def ui_preview() -> FileResponse:
+    """개발용: ?screen=<state>로 개별 확장 화면에 직접 진입한다."""
+    return FileResponse(STATIC / "ui-preview.html")
+
+
+@app.get("/ui-assets/{filename}")
+async def ui_asset(filename: str) -> FileResponse:
+    """미리보기와 실제 확장이 동일한 스타일 파일을 사용하게 한다."""
+    assets = {
+        "styles.css": REPO_ROOT / "styles.css",
+        "tips.css": REPO_ROOT / "tips.css",
+        "ui-preview.css": STATIC / "ui-preview.css",
+        "ui-preview.js": STATIC / "ui-preview.js",
+    }
+    path = assets.get(filename)
+    if path is None:
+        raise HTTPException(status_code=404, detail="unknown UI asset")
+    return FileResponse(path)
+
+
 @app.get("/")
 async def root() -> dict[str, Any]:
     return {
         "name": "Ulysses",
         "viewer": "/viewer",
         "demo_shop": "/shop",
+        "ui_board": "/ui-board",
+        "ui_preview": "/ui-preview?screen=context-shortage",
         "stream": "/api/stream",
         "docs": "/docs",
     }

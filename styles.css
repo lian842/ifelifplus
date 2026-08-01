@@ -153,6 +153,72 @@ html.agent24-dialog-open {
   animation: agent24-brand-copy 520ms cubic-bezier(0.2, 0.8, 0.2, 1) 1.72s both;
 }
 
+#agent24-purchase-guard
+  .agent24-dialog[data-brand-state="thinking"]
+  .agent24-brand {
+  top: 104px;
+  width: 58px;
+  gap: 0;
+}
+#agent24-purchase-guard
+  .agent24-dialog[data-brand-state="thinking"]
+  .agent24-float {
+  animation: agent24-loading-roll 920ms linear infinite;
+}
+#agent24-purchase-guard
+  .agent24-dialog[data-brand-state="thinking"]
+  .agent24-mark-eye,
+#agent24-purchase-guard
+  .agent24-dialog[data-brand-state="returning"]
+  .agent24-mark-eye,
+#agent24-purchase-guard
+  .agent24-dialog[data-brand-state="thinking"]
+  .agent24-eye-orbit,
+#agent24-purchase-guard
+  .agent24-dialog[data-brand-state="returning"]
+  .agent24-eye-orbit {
+  animation: none;
+}
+#agent24-purchase-guard
+  .agent24-dialog[data-brand-state="thinking"]
+  .agent24-brand
+  span {
+  opacity: 0;
+  clip-path: inset(0 100% 0 0);
+  transform: translateX(-8px);
+  animation: none;
+}
+#agent24-purchase-guard
+  .agent24-dialog[data-brand-state="returning"]
+  .agent24-float {
+  animation: agent24-brand-return 720ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+#agent24-purchase-guard
+  .agent24-dialog[data-brand-state="returning"]
+  .agent24-brand
+  span {
+  animation: agent24-brand-copy 420ms cubic-bezier(0.2, 0.8, 0.2, 1) 240ms both;
+}
+#agent24-purchase-guard
+  .agent24-dialog[data-brand-state="restored"]
+  .agent24-float,
+#agent24-purchase-guard
+  .agent24-dialog[data-brand-state="restored"]
+  .agent24-brand
+  span {
+  opacity: 1;
+  transform: none;
+  clip-path: none;
+  animation: none;
+}
+#agent24-purchase-guard
+  .agent24-dialog[data-brand-state="hidden"]
+  .agent24-brand {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-50%) scale(0.94);
+}
+
 #agent24-purchase-guard .agent24-dialog[data-mood="negative"] .agent24-brand {
   top: 70px;
   filter: drop-shadow(0 16px 22px rgba(45, 52, 56, 0.16));
