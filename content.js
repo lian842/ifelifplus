@@ -718,9 +718,7 @@
       return;
     }
 
-    const flagged = wizard.cases.filter(
-      (entry) => entry.final?.verdict && entry.final.verdict !== "PASS",
-    );
+    const flagged = wizard.cases.filter(entryWantsFeedback);
     if (!flagged.length) {
       await resolveBatchCases(false);
       return;
@@ -728,18 +726,22 @@
     renderBatchFeedbackScreen(flagged);
   }
 
+  function entryWantsFeedback(entry) {
+    const result = entry?.final;
+    if (!result) return false;
+    if (typeof result.should_feedback === "boolean") {
+      return result.should_feedback;
+    }
+    // Backward compatibility while an already-running backend still returns
+    // the pre-agent-verdict response shape.
+    return Boolean(result.verdict && result.verdict !== "PASS");
+  }
+
   function renderBatchFeedbackScreen(flagged) {
     const cardsHtml = flagged
       .map((entry, index) => {
         const result = entry.final;
         const verdict = result.verdict || "WARN";
-        const reasons = [...new Set((result.breakdown || [])
-          .filter((item) => item.key !== "dark_pattern_detected")
-          .map((item) => item.label)
-          .filter(Boolean))];
-        const reasonItems = reasons
-          .map((reason) => `<li>${escapeAttr(reason)}</li>`)
-          .join("");
         return `
           <article class="agent24-batch-feedback-card">
             <div class="agent24-feedback-card-head">
@@ -750,7 +752,6 @@
               <p id="agent24-feedback-summary-${index}">${escapeAttr(result.summary || "확인된 소비 조건을 다시 살펴보세요.")}</p>
               <button type="button" aria-expanded="false" aria-controls="agent24-feedback-summary-${index}" hidden>더 보기</button>
             </div>
-            ${reasonItems ? `<details><summary>판단 근거 ${reasons.length}개</summary><ul>${reasonItems}</ul></details>` : ""}
           </article>`;
       })
       .join("");
@@ -792,9 +793,7 @@
   }
 
   async function resolveBatchCases(blockCheckout, overrideFlagged = false) {
-    const flagged = wizard.cases.filter(
-      (entry) => entry.final?.verdict && entry.final.verdict !== "PASS",
-    );
+    const flagged = wizard.cases.filter(entryWantsFeedback);
     const holds = flagged.filter((entry) =>
       ["HOLD", "STRONG_HOLD"].includes(entry.final.verdict),
     );
@@ -808,7 +807,7 @@
     await Promise.all(
       wizard.cases.map((entry) =>
         resolveCase(
-          overrideFlagged && entry.final?.verdict !== "PASS" ? "override" : "accept",
+          overrideFlagged && entryWantsFeedback(entry) ? "override" : "accept",
           "",
           entry.caseId,
         ),

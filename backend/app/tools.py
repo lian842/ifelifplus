@@ -96,17 +96,22 @@ def get_purchase_history(ctx: RunContextWrapper[Ctx], category: str) -> dict[str
 
 @function_tool
 def get_owned_items(ctx: RunContextWrapper[Ctx], category: str) -> dict[str, Any]:
-    """사용자가 직접 등록한 보유 물품을 반환한다. necessity 주장 검증에 사용한다."""
+    """직접 등록한 보유품과 구매 이력상 보유가 추정되는 비소모품을 반환한다."""
     items = store.owned_in_category(ctx.context.profile, category)
     return {
         "category": category,
         "count": sum(int(i.get("count", 1)) for i in items),
         "items": [
             {"name": i["name"], "count": i.get("count", 1),
-             "last_used_days_ago": i.get("last_used_days_ago")}
+             "last_used_days_ago": i.get("last_used_days_ago"),
+             "source": i.get("source", "registered"),
+             "ownership_inferred": bool(i.get("ownership_inferred"))}
             for i in items
         ],
-        "note": "사용자가 등록하지 않은 물품은 여기에 나타나지 않는다. 없다고 단정하지 말 것.",
+        "note": (
+            "source=registered는 직접 등록, source=purchase_history는 구매 이력 기반 보유 추정이다. "
+            "구매 이력 추정은 처분·반품 여부를 확인하지 못했으므로 현재 보유를 확정하지 말 것."
+        ),
     }
 
 
