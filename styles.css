@@ -93,8 +93,11 @@ html.agent24-dialog-open { overflow: hidden !important; }
   width: 100%;
   height: 100%;
   display: block;
-  transform-origin: 50% 50%;
-  animation: agent24-mark-idle 2.8s ease-in-out 2.3s infinite;
+}
+#agent24-purchase-guard .agent24-mark-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: agent24-eye-pivot 2.8s ease-in-out 2.3s infinite;
 }
 #agent24-purchase-guard .agent24-brand span {
   color: rgba(58, 72, 79, .64);
@@ -113,8 +116,8 @@ html.agent24-dialog-open { overflow: hidden !important; }
 #agent24-purchase-guard .agent24-dialog[data-brand-state="thinking"] .agent24-float {
   animation: agent24-loading-roll 920ms linear infinite;
 }
-#agent24-purchase-guard .agent24-dialog[data-brand-state="thinking"] .agent24-float svg,
-#agent24-purchase-guard .agent24-dialog[data-brand-state="returning"] .agent24-float svg {
+#agent24-purchase-guard .agent24-dialog[data-brand-state="thinking"] .agent24-mark-eye,
+#agent24-purchase-guard .agent24-dialog[data-brand-state="returning"] .agent24-mark-eye {
   animation: none;
 }
 #agent24-purchase-guard .agent24-dialog[data-brand-state="thinking"] .agent24-brand span {
@@ -463,7 +466,9 @@ html.agent24-dialog-open { overflow: hidden !important; }
 #agent24-purchase-guard .agent24-batch-feedback { width: min(560px, 100%); margin: 0 auto; text-align: center; }
 #agent24-purchase-guard .agent24-batch-interview { position: relative; top: -14px; }
 #agent24-purchase-guard .agent24-batch-interview > h1,
-#agent24-purchase-guard .agent24-batch-feedback > h1 { margin: 0; color: #31434c; font-size: 30px; font-weight: 570; letter-spacing: -.04em; }
+#agent24-purchase-guard .agent24-batch-feedback > h1 { color: #31434c; font-size: 30px; font-weight: 570; letter-spacing: -.04em; }
+#agent24-purchase-guard .agent24-batch-interview > h1 { margin: 24px 0 0; }
+#agent24-purchase-guard .agent24-batch-feedback > h1 { margin: 0; }
 #agent24-purchase-guard .agent24-batch-question-list,
 #agent24-purchase-guard .agent24-batch-feedback-list { display: grid; gap: 14px; margin-top: 24px; text-align: left; }
 #agent24-purchase-guard .agent24-batch-question,
@@ -499,6 +504,19 @@ html.agent24-dialog-open { overflow: hidden !important; }
 #agent24-purchase-guard .agent24-offer-line strong { flex: 0 0 auto; color: #3e5964; font-size: 15px; }
 #agent24-purchase-guard .agent24-offer-meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; margin-top: 12px; color: rgba(62, 83, 93, .48); font-size: 10px; }
 #agent24-purchase-guard .agent24-main-action { min-height: 52px; display: inline-flex; align-items: center; gap: 28px; margin-top: 26px; padding: 13px 21px; color: white; border: 0; border-radius: 17px; background: #a8b4d9; box-shadow: 0 10px 24px rgba(116, 128, 171, .16), inset 0 1px 0 rgba(255, 255, 255, .18); font-size: 13px; font-weight: 620; cursor: pointer; }
+#agent24-purchase-guard .agent24-batch-interview .agent24-main-action:not(:disabled) {
+  background: linear-gradient(135deg, #b4bee0 0%, #a8b4d9 42%, #879bd4 100%);
+  box-shadow: 0 13px 30px rgba(112, 128, 187, .25), inset 0 1px 0 rgba(255, 255, 255, .4);
+}
+#agent24-purchase-guard .agent24-batch-interview .agent24-main-action:not(:disabled):hover {
+  background: linear-gradient(135deg, #aeb9dd 0%, #9fadd8 42%, #7d92d0 100%);
+  box-shadow: 0 15px 34px rgba(103, 120, 183, .31), inset 0 1px 0 rgba(255, 255, 255, .42);
+}
+#agent24-purchase-guard .agent24-batch-interview > .agent24-quiet-action {
+  display: block;
+  top: 0;
+  margin: 15px auto 0;
+}
 #agent24-purchase-guard .agent24-main-action:disabled,
 #agent24-purchase-guard .agent24-prompt button:disabled { color: #9aa5ab; background: #e3e6e8; box-shadow: none; cursor: default; }
 #agent24-purchase-guard .agent24-main-action span { font-size: 18px; font-weight: 350; }
@@ -536,9 +554,9 @@ html.agent24-dialog-open { overflow: hidden !important; }
   to { opacity: 1; clip-path: inset(0 0 0 0); transform: translateX(0); }
 }
 @keyframes agent24-loading-roll { to { transform: rotate(360deg); } }
-@keyframes agent24-mark-idle {
-  0%, 100% { transform: rotate(-6deg); }
-  50% { transform: rotate(6deg); }
+@keyframes agent24-eye-pivot {
+  0%, 100% { transform: rotate(-14deg); }
+  50% { transform: rotate(14deg); }
 }
 @keyframes agent24-brand-return {
   from { transform: rotate(0deg); }

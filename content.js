@@ -97,7 +97,7 @@
   }
 
   function lianBareMark() {
-    return `<svg viewBox="0 0 340 340" aria-hidden="true"><circle fill="#D4D4D4" cx="170" cy="170" r="104"/><path transform="rotate(-40 107 140)" fill="#F5823A" d="M107 140L140.96 122.96L150.2 157.04Z"/></svg>`;
+    return `<svg viewBox="0 0 340 340" aria-hidden="true"><circle fill="#D4D4D4" cx="170" cy="170" r="104"/><g transform="rotate(-40 107 140)"><path class="agent24-mark-eye" fill="#F5823A" d="M107 140L140.96 122.96L150.2 157.04Z"/></g></svg>`;
   }
 
   function enterBrandThinking() {
