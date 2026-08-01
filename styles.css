@@ -94,7 +94,7 @@ html.agent24-dialog-open { overflow: hidden !important; }
   height: 100%;
   display: block;
   transform-origin: 50% 50%;
-  animation: agent24-mark-idle 4.8s ease-in-out 2.3s infinite;
+  animation: agent24-mark-idle 2.8s ease-in-out 2.3s infinite;
 }
 #agent24-purchase-guard .agent24-brand span {
   color: rgba(58, 72, 79, .64);
@@ -537,10 +537,8 @@ html.agent24-dialog-open { overflow: hidden !important; }
 }
 @keyframes agent24-loading-roll { to { transform: rotate(360deg); } }
 @keyframes agent24-mark-idle {
-  0%, 54%, 100% { transform: translateY(0) rotate(0deg); }
-  63% { transform: translateY(-2px) rotate(-1.6deg); }
-  72% { transform: translateY(1px) rotate(.8deg); }
-  80% { transform: translateY(0) rotate(0deg); }
+  0%, 100% { transform: rotate(-6deg); }
+  50% { transform: rotate(6deg); }
 }
 @keyframes agent24-brand-return {
   from { transform: rotate(0deg); }
