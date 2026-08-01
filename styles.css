@@ -35,7 +35,8 @@ html.agent24-dialog-open {
 #agent24-purchase-guard .agent24-dialog {
   position: relative;
   width: min(100%, 440px);
-  overflow: hidden;
+  max-height: 86vh;
+  overflow-y: auto;
   border: 1px solid #d9e0e6;
   border-radius: 8px;
   background: #ffffff;
@@ -126,6 +127,112 @@ html.agent24-dialog-open {
 #agent24-purchase-guard .agent24-button-secondary:hover {
   border-color: #8c99a5;
   background: #f4f6f8;
+}
+
+#agent24-purchase-guard p {
+  margin: 14px 0 0;
+  color: #52606d;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+#agent24-purchase-guard .agent24-hint {
+  font-size: 12.5px;
+  color: #8c99a5;
+  margin-top: 4px;
+}
+
+#agent24-purchase-guard .agent24-field {
+  display: block;
+  font-size: 13px;
+  color: #52606d;
+  margin-top: 16px;
+}
+
+#agent24-purchase-guard .agent24-field input,
+#agent24-purchase-guard .agent24-field textarea {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 9px 10px;
+  border: 1px solid #c7d0d8;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 14px;
+  color: #17212b;
+}
+
+#agent24-purchase-guard .agent24-budget {
+  font-family: ui-monospace, "SF Mono", monospace;
+  font-size: 12.5px;
+  background: #f4f6f8;
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: #34414d;
+}
+
+#agent24-purchase-guard .agent24-offer-prompt {
+  font-weight: 700;
+  color: #17212b;
+}
+
+#agent24-purchase-guard .agent24-alt-source {
+  font-family: ui-monospace, "SF Mono", monospace;
+  font-size: 11.5px;
+  color: #8c99a5;
+}
+
+#agent24-purchase-guard .agent24-alt-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+#agent24-purchase-guard .agent24-alt-card {
+  border: 1px solid #d9e0e6;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #f8fafb;
+}
+
+#agent24-purchase-guard .agent24-alt-name {
+  margin: 0;
+  font-weight: 700;
+  font-size: 13.5px;
+  color: #17212b;
+}
+
+#agent24-purchase-guard .agent24-alt-price {
+  margin: 2px 0 0;
+  font-size: 14px;
+  color: #17212b;
+}
+
+#agent24-purchase-guard .agent24-alt-note {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: #52606d;
+}
+
+#agent24-purchase-guard .agent24-alt-savings {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #16775b;
+}
+
+#agent24-purchase-guard .agent24-alt-disclaimer {
+  margin: 6px 0 8px;
+  font-size: 11px;
+  color: #9a6a1e;
+}
+
+#agent24-purchase-guard .agent24-alt-buy-btn {
+  min-height: 38px;
+  width: 100%;
 }
 
 @media (max-width: 480px) {

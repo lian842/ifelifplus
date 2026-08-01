@@ -24,9 +24,37 @@
         /\/checkout(?:\/|$)/i,
         /\/payment(?:\/|$)/i,
       ],
-      paymentWords: KOREAN_PAYMENT_WORDS,
+      // Coupang gets its own word list (rather than the shared
+      // KOREAN_PAYMENT_WORDS constant) to add "바로구매" — verified against a
+      // real product page (2026-08-01): the button's text is exactly
+      // "바로구매", inside a span.prod-buy-btn__txt. "구매하기"/"주문하기" are
+      // deliberately NOT added here (matches the existing design: those are
+      // pre-checkout navigation wording and only count once already on a
+      // checkoutPath, via checkoutPaymentWords below — see
+      // tests/sites.test.js "allows checkout navigation wording...").
+      paymentWords: /(결제하기|결제\s*및\s*주문|주문\s*및\s*결제|주문\s*확정|바로구매)/,
       checkoutPaymentWords: KOREAN_ORDER_WORDS,
       paymentSelectors: [],
+      // Verified against a real coupang product page (2026-08-01):
+      // document.title carries the product name ("<name> - 쿠팡!" pattern),
+      // and the price sits inside an element whose class contains
+      // "price-container" (seen as "price-container price-container-v2" —
+      // matching on the substring rather than the exact modifier keeps this
+      // working across that versioning). When a discounted price is shown
+      // alongside the original, both numbers appear in the same container;
+      // the discounted one is always the smaller number, so take the min.
+      scrapeProduct() {
+        const name = document.title.replace(/\s*-\s*쿠팡!?\s*$/, "").trim();
+        const container = document.querySelector('[class*="price-container"]');
+        let price = null;
+        if (container) {
+          const numbers = [...container.textContent.matchAll(/([\d,]+)\s*원/g)].map((m) =>
+            Number(m[1].replace(/,/g, "")),
+          );
+          if (numbers.length) price = Math.min(...numbers);
+        }
+        return { name: name || null, price };
+      },
     },
     {
       id: "musinsa",
