@@ -247,10 +247,9 @@ function numsBox(b) {
 
 // 3단계 — 질문. 객관식이냐 주관식이냐는 에이전트가 정해서 내려보낸다.
 function renderQuestion(res) {
+  // 다크패턴 탐지 결과(res.dark_patterns)는 팝업에 표시하지 않는다.
+  // 탐지와 점수 반영(+1)은 그대로 유지된다.
   const q = res.question || {};
-  const dp = (res.dark_patterns||[]).map(d => `<li>${d.type} — “${d.evidence}”` +
-    (d.confirmed ? ' <span class="muted">(DOM에서 직접 확인)</span>'
-                 : ' <span class="muted">(문구만 확인 · 진위 미확인)</span>') + '</li>').join('');
   const ov = res.override_stats || {};
   const opts = (q.options || []).map(o => `
     <label class="opt"><input type="checkbox" name="qopt" value="${o.id}">
@@ -262,7 +261,6 @@ function renderQuestion(res) {
     <div class="kicker">ULYSSES · 결제 직전 개입</div>
     <h2>${q.text || '왜 지금 사야 합니까?'}</h2>
     ${numsBox(res.budget)}
-    ${dp ? `<p class="muted">이 페이지에서 탐지된 눈속임 설계</p><ul class="bd">${dp}</ul>` : ''}
     ${ov.overrides_last_30d ? `<p class="muted">최근 30일간 보류 판정을 ${ov.overrides_last_30d}회 무시했고 총 ${won(ov.override_amount)}입니다.</p>` : ''}
     ${opts ? `<div class="opts">${opts}</div>` : ''}
     ${freeText}

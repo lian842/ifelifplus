@@ -391,24 +391,9 @@
     `;
   }
 
-  function renderDarkPatternBlock(patterns) {
-    if (!patterns || !patterns.length) return "";
-    return `
-      <div class="agent24-dark-patterns">
-        <p class="agent24-dark-patterns-title">이 페이지에서 탐지된 눈속임 설계</p>
-        ${patterns
-          .map(
-            (p) => `
-          <p class="agent24-dark-pattern-item">
-            · ${escapeAttr(p.type)} — "${escapeAttr(p.evidence)}"
-            (${p.confirmed ? "실제로 확인됨" : "문구만 확인, 진위 미확인"})
-          </p>
-        `,
-          )
-          .join("")}
-      </div>
-    `;
-  }
+  // 다크패턴 탐지 결과는 팝업에 표시하지 않는다.
+  // 탐지 자체는 백엔드에서 계속 수행되고 위험 점수(+1)에도 반영되지만,
+  // 화면에 나열하지는 않는다. 응답의 result.dark_patterns 는 그대로 내려온다.
 
   // ---- price_only screen (input 0회 — investigation already ran server-side) -------------------------------------------------
 
@@ -432,7 +417,6 @@
       ${priceHtml}
       ${pc.note ? `<p class="agent24-hint">${escapeAttr(pc.note)}</p>` : ""}
       ${result.agent_error ? `<p class="agent24-hint">일부 조사에 실패했지만 확인된 정보만으로 안내합니다.</p>` : ""}
-      ${renderDarkPatternBlock(result.dark_patterns)}
       <div class="agent24-actions">
         <button type="button" class="agent24-button agent24-button-secondary" id="agent24-priceonly-cancel">취소</button>
         <button type="button" class="agent24-button agent24-button-primary" id="agent24-priceonly-buy">결제하기</button>
@@ -482,7 +466,6 @@
       <p class="agent24-label">AGENT24 · 결제 직전 개입</p>
       <h2 id="agent24-title">${escapeAttr(q.text)}</h2>
       ${renderBudgetBlock(result.budget)}
-      ${renderDarkPatternBlock(result.dark_patterns)}
       ${optionsHtml}
       ${
         freeTextNeeded
