@@ -308,7 +308,8 @@
   // ---- Static fallback (unchanged — used if the backend is unreachable at any point) -------------------------------------------------
 
   function renderStaticFallback() {
-    restoreBrand();
+    clearTimeout(brandRestoreTimer);
+    dialogElements.dialog.dataset.brandState = "hidden";
     dialogElements.dialog.dataset.mood = "calm";
     dialogElements.screen.innerHTML = `
       <div class="agent24-empty agent24-fallback">
@@ -459,6 +460,8 @@
   }
 
   function renderExtractionFailure() {
+    clearTimeout(brandRestoreTimer);
+    dialogElements.dialog.dataset.brandState = "hidden";
     dialogElements.dialog.dataset.mood = "waiting";
     dialogElements.screen.innerHTML = `
       <div class="agent24-empty">
@@ -473,6 +476,10 @@
   }
 
   async function renderPurchaseContextScreen() {
+    clearTimeout(brandRestoreTimer);
+    const brandCopy = dialogElements.dialog.querySelector(".agent24-brand span");
+    if (brandCopy) brandCopy.textContent = "현명한 소비를 도와드려요";
+    delete dialogElements.dialog.dataset.brandState;
     dialogElements.dialog.dataset.mood = "waiting";
     const [items, budget] = await Promise.all([readCheckoutItems(), loadActiveBudget()]);
     if (!items.length) {

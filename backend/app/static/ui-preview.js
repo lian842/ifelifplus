@@ -118,7 +118,8 @@
   const screen = params.get("screen") || "context-shortage";
   const render = screens[screen] || screens["context-shortage"];
   const mood = screen === "loading" ? "thinking" : screen === "context-shortage" ? "negative" : "calm";
-  const brandState = screen === "loading" ? "thinking" : "restored";
+  const isError = screen === "extraction-error" || screen === "backend-error";
+  const brandState = isError ? "hidden" : screen === "loading" ? "thinking" : "restored";
   const brandCopy = screen === "context-remaining" || screen === "context-zero" || screen === "context-shortage"
     ? "현명한 소비를 도와드려요" : "현명한 소비를 도와드릴게요";
 
