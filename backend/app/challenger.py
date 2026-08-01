@@ -68,6 +68,14 @@ SYSTEM_PROMPT = """\
    - 이미 보유 중이면 대안 탐색 자체를 생략한다
    find_alternatives는 계산 근거만 준다. 실제 상품·가격은 web_search로 확인해서 채워라.
 
+3-1. 최저가는 반드시 가격비교 사이트를 겨냥해서 찾아라.
+   get_price_comparison_sources를 먼저 호출해 검색 전략을 받고,
+   거기서 준 쿼리로 web_search를 실행하라. 다나와·에누리·네이버쇼핑이 우선이다.
+   그냥 "상품명 최저가"로 검색하면 블로그와 광고글이 걸려 엉뚱한 가격을 물어온다.
+   찾은 판매처는 offers 배열에 가격 오름차순으로 담고, 각각 근거 URL을 붙여라.
+   모델명·용량·수량이 정확히 같은 것만 담아라. 규격이 다르면 비교가 아니라 오해다.
+   배송비 별도면 note에 적어라. 표기가만 싸고 총액이 비싼 경우가 흔하다.
+
 4. 확인하지 못한 것을 추측하지 마라.
    검증 실패 시 반드시 이렇게 말한다:
    "최저가라는 주장은 확인하지 못했습니다."
@@ -126,14 +134,45 @@ class Claim(BaseModel):
 
 class Findings(BaseModel):
     claims: list[Claim]
+    offers: list[PriceOffer] = Field(
+        description="더 싼 판매처 목록. 가격 오름차순. 확인 못 했으면 빈 배열"
+    )
+    cheaper_price: int = Field(description="확인된 최저가. 못 찾았으면 0")
     specific_use_case_given: bool = Field(description="사용 시점·상황이 구체적으로 제시되었는가")
     no_owned_substitute: bool = Field(description="대체 가능한 보유품이 없음이 확인되었는가")
     verified_lowest_price: bool = Field(description="실제로 최저가임을 확인했는가. 미확인이면 false")
     price_claim_unverified: bool = Field(description="가격·희소성 주장을 검증하지 못했는가")
     alternative_found: bool
     alternative_summary: str = Field(description="대안 요약. 없으면 '대안을 찾지 못했습니다'")
+    annual_saving: int = Field(
+        description="구조적 대안으로 바꿨을 때의 연간 절약액(원). 계산 못 했으면 0. 추정하지 말 것"
+    )
     summary: str = Field(description="사용자에게 보여줄 사실 요약. 3문장 이내. 인격 언급 금지")
     follow_up_question: str | None = Field(description="가장 약한 주장 하나에 대한 되물음. 없으면 null")
+
+
+class QuestionOption(BaseModel):
+    id: str = Field(description="선택지 식별자. opt1, opt2 ... 형태")
+    label: str = Field(description="사용자에게 보이는 문장. 1줄")
+    implies: str = Field(description="이 선택이 의미하는 claim type. price_urgency/necessity/budget/uniqueness/other")
+
+
+class Question(BaseModel):
+    """개입 팝업에서 사용자에게 던질 질문. 형식까지 에이전트가 정한다."""
+
+    format: Literal["choice", "text"]
+    text: str = Field(description="질문 문장. 고정 문구를 쓰지 말고 이 상품·이 이력에 맞게 쓴다")
+    options: list[QuestionOption] = Field(description="format='choice'일 때 2~4개. 'text'면 빈 배열")
+    allow_free_text: bool = Field(description="객관식이어도 직접 입력을 함께 허용할지")
+    free_text_placeholder: str = Field(description="자유 입력칸의 예시 문구. 없으면 빈 문자열")
+    reason: str = Field(description="왜 이 형식을 골랐는지 한 문장. 심사위원에게 설계 의도를 보여주는 값")
+
+
+class PriceOffer(BaseModel):
+    seller: str = Field(description="판매처 이름")
+    price: int = Field(description="확인된 가격(원). 배송비 별도면 note에 적는다")
+    url: str = Field(description="근거 URL. 없으면 빈 문자열")
+    note: str = Field(description="배송비·조건 등 단서. 없으면 빈 문자열")
 
 
 class PriceCheck(BaseModel):
@@ -145,6 +184,9 @@ class PriceCheck(BaseModel):
     seller: str = Field(description="그 판매처 이름. 없으면 빈 문자열")
     source_url: str = Field(description="근거 URL. 없으면 빈 문자열")
     saving: int = Field(description="현재 가격 대비 절약액. 없으면 0")
+    offers: list[PriceOffer] = Field(
+        description="확인된 판매처 목록. 가격 오름차순. 확인 못 했으면 빈 배열"
+    )
     structural_alternative: str = Field(
         description="반복 구매 소모품일 때의 구조적 대안과 손익분기. 해당 없으면 빈 문자열"
     )
@@ -218,7 +260,102 @@ async def classify(case: dict[str, Any], profile: dict[str, Any]) -> dict[str, A
 
 
 # --------------------------------------------------------------------------
-# Challenger Agent
+# 3단계 — 질문 생성. 무거운 조사(플래닝 모드) 앞에 놓이는 가벼운 한 박자.
+#
+# 이 단계의 목적은 정보 수집만이 아니다. 결제 버튼에서 손을 떼게 하는 것 자체가 개입이다.
+# 그래서 답하기 쉬워야 한다. 긴 서술을 요구하면 사용자는 아무거나 쓰고 넘어간다.
+# 형식(객관식/주관식)은 에이전트가 이 상품과 이 사람의 이력을 보고 정한다.
+# --------------------------------------------------------------------------
+
+QUESTION_PROMPT = """\
+너는 결제 직전에 사용자에게 던질 질문 하나를 설계한다. 조사는 아직 하지 않는다.
+
+## 목적
+1) 이 구매의 근거를 한 조각 확보한다.
+2) 결제 버튼에서 손을 떼게 한다. 답하기 쉬워야 손을 뗀다.
+
+## 형식 선택 (네가 정한다)
+- choice : 기본값. 이 상품에서 나올 법한 답이 몇 가지로 좁혀질 때.
+           선택지는 2~4개. 각각 한 줄. 서로 겹치지 않게.
+- text   : 처음 보는 종류의 상품이라 선택지를 만들면 오히려 답을 왜곡할 때만.
+
+## 선택지를 만드는 법
+- get_purchase_history로 **과거에 이 사용자가 실제로 댄 근거**를 먼저 확인하라.
+  같은 근거가 또 나올 것 같으면 그것을 선택지에 그대로 넣어라.
+  ("지난번에도 '보온력이 더 좋아서'라고 답하셨습니다" 같은 대조가 여기서 만들어진다)
+- read_memory로 이전에 네가 남긴 관찰을 확인하고, 반복되는 패턴이 있으면 반영하라.
+- 보유품이 있으면 get_owned_items로 확인해 "기존 것으로 안 되는 이유"를 물어라.
+- 각 선택지에 implies를 붙여라. 그게 다음 단계의 claim type이 된다.
+
+## 금지
+- "정말 필요한가요?" 같은 죄책감을 유도하는 문장. 사용자는 강박적 구매 상태일 수 있다.
+- 정답이 뻔한 선택지("낭비인 것 같다" 같은 것). 사실을 얻지 못한다.
+- 5개 이상의 선택지. 읽는 데 시간이 걸리면 아무거나 누른다.
+- 도구를 3개 넘게 부르지 마라. 이 단계는 빨라야 한다.
+
+## 톤
+질문은 1문장. 한국어. 고정 문구를 쓰지 마라 — 이 상품에 맞는 질문을 써라.
+"""
+
+
+def build_question_agent() -> Agent[Ctx]:
+    return Agent[Ctx](
+        name="Ulysses Question Designer",
+        model=MODEL,
+        instructions=QUESTION_PROMPT,
+        tools=[t for t in INVESTIGATION_TOOLS
+               if t.name in ("get_purchase_history", "get_owned_items", "read_memory")],
+        output_type=Question,
+        model_settings=ModelSettings(tool_choice="auto"),
+    )
+
+
+DEFAULT_QUESTION = {
+    "format": "text",
+    "text": "왜 지금 사야 합니까?",
+    "options": [],
+    "allow_free_text": True,
+    "free_text_placeholder": "예: 다음 주 등산에 쓸 건데 기존 것은 용량이 부족해요",
+    "reason": "질문 생성에 실패해 기본 질문으로 대체했습니다.",
+}
+
+
+async def make_question(case: dict[str, Any], profile: dict[str, Any],
+                        classification: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
+    """개입 팝업에 띄울 질문을 만든다. 실패해도 기본 질문으로 반드시 하나는 돌려준다."""
+    ctx = Ctx(case=case, profile=profile, classification=classification)
+    p = case["product"]
+    prompt = f"""\
+[구매 사건 {case['case_id']} · 질문 설계 단계]
+상품: {p.get('name')} / {p.get('price'):,}원
+카테고리: {classification.get('category')}
+할인 문구: {p.get('discount_text') or '없음'}
+발견 후 {case.get('dwell_minutes')}분 만에 결제 시도
+이례 신호: {', '.join(case.get('mode', {}).get('unusual_reasons', [])) or '없음'}
+
+이 사람에게 던질 질문 하나를 설계하라.
+"""
+    events.emit("system", {"step": "question_design_start", "input_preview": prompt},
+                case_id=case["case_id"])
+    try:
+        result = Runner.run_streamed(build_question_agent(), input=prompt, context=ctx, max_turns=6)
+        await asyncio.wait_for(_pump(result, case["case_id"]), timeout=45)
+        q: Question = result.final_output
+        out = q.model_dump()
+        if q.format == "choice" and len(q.options) < 2:
+            out = DEFAULT_QUESTION | {"text": q.text or DEFAULT_QUESTION["text"]}
+        events.emit("system", {"step": "question_design_done", "question": out},
+                    case_id=case["case_id"])
+        return out, None
+    except Exception as exc:  # noqa: BLE001 - 질문이 없으면 개입 자체가 멈춘다
+        msg = f"{type(exc).__name__}: {exc}"
+        events.emit("system", {"step": "question_design_failed", "error": msg},
+                    case_id=case["case_id"])
+        return dict(DEFAULT_QUESTION), msg
+
+
+# --------------------------------------------------------------------------
+# 4단계 — 플래닝 모드 (Challenger Agent)
 # --------------------------------------------------------------------------
 
 def build_agent() -> Agent[Ctx]:
@@ -234,7 +371,7 @@ def build_agent() -> Agent[Ctx]:
 
 
 def build_input(case: dict[str, Any], profile: dict[str, Any], classification: dict[str, Any],
-                user_reason: str) -> str:
+                user_reason: str, want_alternatives: bool = True) -> str:
     p = case["product"]
     memories = store.read_memory(profile["profile_id"], limit=5)
     mem_txt = "\n".join(f"- ({m['confidence']}) {m['text']}" for m in memories) or "- 없음"
@@ -247,7 +384,9 @@ def build_input(case: dict[str, Any], profile: dict[str, Any], classification: d
 상품: {p.get('name')}
 가격: {p.get('price'):,}원
 카테고리(1차 분류): {classification['category']}
-판매처: {p.get('url') or '알 수 없음'}
+판매처: {(case.get('site') or {}).get('site_name') or '알 수 없음'} ({p.get('url') or 'URL 없음'})
+{(case.get('site') or {}).get('site_note') or ''}
+{(case.get('site') or {}).get('conversion_note') or ''}
 할인 문구: {p.get('discount_text') or '없음'}
 상품 페이지 최초 관찰 후 경과: {case.get('dwell_minutes')}분
 결제 시각: {case.get('checkout_at')}
@@ -259,8 +398,15 @@ def build_input(case: dict[str, Any], profile: dict[str, Any], classification: d
 [이전 개입에서 네가 남긴 관찰]
 {mem_txt}
 
-[사용자에게 "왜 지금 사야 합니까?"라고 물었을 때의 답변]
+[네가 설계한 질문]
+{(case.get('question') or {}).get('text') or '왜 지금 사야 합니까?'}
+
+[사용자의 답변]
 {user_reason.strip() or '(답변 없음)'}
+
+[사용자가 "다른 가격·상품을 찾아달라"에 답한 것]
+{'예 — 더 싼 판매처와 대안을 찾아 제시하라.' if want_alternatives
+ else '아니오 — 대안 탐색은 하지 마라. 주장 검증에만 집중하라. offers는 빈 배열로 둔다.'}
 
 이 답변을 claim으로 분해하고, 필요한 도구만 골라 조사한 뒤 Findings로 보고하라.
 """
@@ -268,6 +414,7 @@ def build_input(case: dict[str, Any], profile: dict[str, Any], classification: d
 
 async def investigate(case: dict[str, Any], profile: dict[str, Any],
                       classification: dict[str, Any], user_reason: str,
+                      want_alternatives: bool = True,
                       note: str = "checkout") -> tuple[dict[str, Any] | None, Ctx, str | None]:
     """자율 조사 루프를 끝까지 돌린다. 사용자 입력은 여기 들어온 1회가 전부다.
 
@@ -275,7 +422,7 @@ async def investigate(case: dict[str, Any], profile: dict[str, Any],
     """
     ctx = Ctx(case=case, profile=profile, classification=classification)
     agent = build_agent()
-    prompt = build_input(case, profile, classification, user_reason)
+    prompt = build_input(case, profile, classification, user_reason, want_alternatives)
 
     events.emit("system", {
         "step": "agent_run_start", "note": note, "model": MODEL,
@@ -308,6 +455,10 @@ PRICE_ONLY_PROMPT = """\
 "정말 필요한가요" 같은 질문을 하지 마라. 사용자는 아무 답변도 하지 않았고, 물어볼 수도 없다.
 
 ## 절차
+0. get_price_comparison_sources를 먼저 호출해 검색 전략을 받는다.
+   다나와·에누리·네이버쇼핑을 겨냥한 쿼리로 web_search를 실행하라.
+   "상품명 최저가"로만 검색하면 블로그·광고글이 걸린다.
+   찾은 판매처는 offers에 가격 오름차순으로 담고 각각 근거 URL을 붙여라.
 1. get_purchase_history로 반복 구매 소모품인지 먼저 확인한다.
    - 반복 구매라면 find_alternatives(mode='longterm_substitute')로 손익분기 계산 근거를 받고,
      web_search로 실제 대체재 가격을 찾아 손익분기 개월수를 직접 계산한다.

@@ -172,6 +172,37 @@ def detect_dark_pattern(ctx: RunContextWrapper[Ctx]) -> dict[str, Any]:
 # --------------------------------------------------------------------------
 
 @function_tool
+def get_price_comparison_sources(ctx: RunContextWrapper[Ctx], product_name: str) -> dict[str, Any]:
+    """국내 최저가를 찾을 때 어디를 어떻게 볼지 알려준다.
+
+    이 도구는 가격을 직접 주지 않는다. 검색 전략을 준다.
+    범용 웹 검색은 블로그·광고성 글에 걸려 엉뚱한 가격을 물어오기 쉽다.
+    가격비교 사이트를 명시적으로 겨냥해야 실제 판매가가 나온다.
+    반환된 쿼리를 web_search에 그대로 넣어 사용하라.
+    """
+    name = (product_name or "").strip()
+    sources = [
+        {"site": "다나와", "domain": "danawa.com", "note": "가전·PC·디지털에 강하다. 최저가 순 정렬"},
+        {"site": "에누리", "domain": "enuri.com", "note": "생활용품까지 폭넓다"},
+        {"site": "네이버쇼핑", "domain": "shopping.naver.com", "note": "카탈로그 단위 최저가"},
+        {"site": "쿠팡", "domain": "coupang.com", "note": "로켓배송 여부로 실구매가가 달라진다"},
+        {"site": "11번가", "domain": "11st.co.kr", "note": "쿠폰가와 카드할인가가 표기가와 다르다"},
+    ]
+    return {
+        "product_name": name,
+        "sources": sources,
+        "suggested_queries": [f"{name} 최저가 {s['site']}" for s in sources[:3]]
+                             + [f"site:{s['domain']} {name}" for s in sources[:3]],
+        "rules": [
+            "모델명·용량·수량이 정확히 같은지 확인하라. 규격이 다르면 비교하지 마라.",
+            "배송비 별도 표기를 놓치지 마라. 표기가가 싸도 총액이 비쌀 수 있다.",
+            "쿠폰·카드할인 조건부 가격은 조건을 note에 함께 적어라.",
+            "가격을 찾지 못했으면 찾지 못했다고 하라. 최저가라고 단정하지 마라.",
+        ],
+    }
+
+
+@function_tool
 def find_alternatives(
     ctx: RunContextWrapper[Ctx],
     product_name: str,
@@ -297,6 +328,7 @@ INVESTIGATION_TOOLS = [
     read_memory,
     check_price_claim,
     detect_dark_pattern,
+    get_price_comparison_sources,
     find_alternatives,
     write_memory,
     apply_action,

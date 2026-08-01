@@ -47,6 +47,15 @@
   .actions button { flex:1; min-width:130px; border-radius:8px; padding:11px; font-weight:700; cursor:pointer; border:1px solid #d1d5db; background:#fff; }
   .actions .primary { background:#111827; color:#fff; border-color:#111827; }
   .spinner { font-size:13px; color:#6b7280; }
+  .opts { display:flex; flex-direction:column; gap:6px; margin:10px 0; }
+  .opt { display:flex; align-items:center; gap:8px; border:1px solid #e5e7eb; border-radius:8px;
+         padding:10px 12px; cursor:pointer; font-size:14px; }
+  .opt:hover { border-color:#111827; }
+  .opt:has(input:checked) { border-color:#111827; background:#f3f4f6; }
+  .opt span { flex:1; }
+  .opt em { font-style:normal; font-size:11px; color:#9ca3af; }
+  .yn { display:flex; align-items:center; gap:8px; margin:12px 0 4px; font-size:14px;
+        background:#f8f9fb; border-radius:8px; padding:10px 12px; cursor:pointer; }
   code.small { font-size:11px; }
 </style>
 </head>
@@ -88,13 +97,15 @@
 
 <script>
 const API = location.origin;
+// 실제로 검색 가능한 상품명을 쓴다. 가상 상품명이면 web_search가 최저가를 찾을 수 없고,
+// 심사위원 앞에서 "대안을 찾지 못했습니다"만 반복하게 된다.
 const PRODUCTS = [
-  { name:"제주 삼다수 2L x 6병", price:7900, category:"water", tag:"생필품", was:9900 },
-  { name:"한정판 보온 텀블러 500ml", price:69000, category:"tumbler", tag:"오늘만 30%", was:99000 },
+  { name:"제주 삼다수 2L 6병", price:7900, category:"water", tag:"생필품", was:9900 },
+  { name:"스탠리 클래식 진공 텀블러 473ml", price:69000, category:"tumbler", tag:"오늘만 30%", was:99000 },
   { name:"타이레놀 500mg 30정", price:8900, category:"medicine", tag:"의약품", was:0 },
-  { name:"모나미 볼펜 3자루", price:1200, category:"stationery", tag:"", was:0 },
-  { name:"게이밍 노트북 RTX4070", price:2190000, category:"laptop", tag:"12개월 무이자", was:2490000 },
-  { name:"러닝화 에어줌 페가수스", price:139000, category:"shoes", tag:"재고 3개", was:169000 },
+  { name:"모나미 153 볼펜 12자루", price:4800, category:"stationery", tag:"", was:0 },
+  { name:"LG 그램 16 16Z90S 노트북", price:2190000, category:"laptop", tag:"12개월 무이자", was:2490000 },
+  { name:"나이키 에어 줌 페가수스 41", price:139000, category:"shoes", tag:"재고 3개", was:169000 },
 ];
 
 let current = null, caseId = null;
@@ -219,17 +230,28 @@ function numsBox(b) {
   </div>`;
 }
 
+// 3단계 — 질문. 객관식이냐 주관식이냐는 에이전트가 정해서 내려보낸다.
 function renderQuestion(res) {
+  const q = res.question || {};
   const dp = (res.dark_patterns||[]).map(d => `<li>${d.type} — “${d.evidence}”${d.verifiable ? '' : ' <span class="muted">(진위 확인 불가)</span>'}</li>`).join('');
   const ov = res.override_stats || {};
+  const opts = (q.options || []).map(o => `
+    <label class="opt"><input type="checkbox" name="qopt" value="${o.id}">
+      <span>${o.label}</span><em>${o.implies}</em></label>`).join('');
+  const freeText = (q.format === 'text' || q.allow_free_text)
+    ? `<textarea id="reason" placeholder="${q.free_text_placeholder || '직접 입력'}"></textarea>` : '';
+
   openModal(`
     <div class="kicker">ULYSSES · 결제 직전 개입</div>
-    <h2>${res.question}</h2>
+    <h2>${q.text || '왜 지금 사야 합니까?'}</h2>
     ${numsBox(res.budget)}
     ${dp ? `<p class="muted">이 페이지에서 탐지된 눈속임 설계</p><ul class="bd">${dp}</ul>` : ''}
     ${ov.overrides_last_30d ? `<p class="muted">최근 30일간 보류 판정을 ${ov.overrides_last_30d}회 무시했고 총 ${won(ov.override_amount)}입니다.</p>` : ''}
-    <textarea id="reason" placeholder="예: 다음 주 등산 갈 때 쓸 건데 기존 텀블러는 500ml가 안 돼요"></textarea>
-    <p class="muted">답변은 여기 한 번만 받습니다. 이후 조사·판정은 에이전트가 스스로 진행합니다.</p>
+    ${opts ? `<div class="opts">${opts}</div>` : ''}
+    ${freeText}
+    <label class="yn"><input type="checkbox" id="wantAlt" checked>
+      <span>${res.alternatives_prompt || '다른 가격이나 대안 상품을 찾아드릴까요?'}</span></label>
+    <p class="muted">질문 형식(${q.format === 'choice' ? '객관식' : '주관식'})은 에이전트가 정했습니다 — ${q.reason || ''}</p>
     <div class="actions">
       <button class="primary" onclick="sendAnswer()">조사 시작</button>
       <button onclick="closeModal()">결제 취소</button>
@@ -273,13 +295,44 @@ function startLive(title) {
 function stopLive() { if (liveES) { liveES.close(); liveES = null; } }
 
 async function sendAnswer() {
-  const reason = document.getElementById('reason').value;
-  startLive('조사 중…');
+  const selected = [...document.querySelectorAll('input[name=qopt]:checked')].map(e => e.value);
+  const el = document.getElementById('reason');
+  const wantAlt = document.getElementById('wantAlt');
+  if (!selected.length && !(el && el.value.trim())) {
+    const w = document.querySelector('.opts') || el;
+    if (w) { w.style.outline = '2px solid #e8380d'; setTimeout(() => w.style.outline = '', 900); }
+    return;
+  }
+  startLive('플래닝 모드 — 메모리와 웹을 조사 중…');
   let res;
-  try { res = await post(`/api/case/${caseId}/answer`, { reason }); }
-  catch (e) { stopLive(); return openModal(errBox('조사에 실패했습니다.', e)); }
+  try {
+    res = await post(`/api/case/${caseId}/answer`, {
+      selected_option_ids: selected,
+      reason: el ? el.value : '',
+      want_alternatives: wantAlt ? wantAlt.checked : true,
+    });
+  } catch (e) { stopLive(); return openModal(errBox('조사에 실패했습니다.', e)); }
   stopLive();
   renderVerdict(res);
+}
+
+// 5단계 — 안 샀을 때 / 더 싸게 샀을 때 아낄 수 있는 돈. 계산은 서버가 한다.
+function savingsBox(s) {
+  if (!s) return '';
+  const offers = (s.offers || []).map(o => `
+    <li><b>${won(o.price)}</b> · ${o.seller}
+      ${o.url ? ` <a href="${o.url}" target="_blank">근거</a>` : ''}
+      ${o.note ? ` <span class="muted">${o.note}</span>` : ''}</li>`).join('');
+  return `
+    <p class="muted">아낄 수 있는 돈</p>
+    <div class="nums">
+      <div class="num"><b>${won(s.not_buying_saves)}</b><span>안 사면</span></div>
+      <div class="num"><b>${s.cheaper_saves ? won(s.cheaper_saves) : '—'}</b><span>더 싼 곳에서 사면</span></div>
+      <div class="num"><b>${s.annual_saving ? won(s.annual_saving) : '—'}</b><span>대안으로 바꾸면 연간</span></div>
+    </div>
+    ${s.work_hours_saved != null ? `<p class="muted">이 금액은 당신의 노동 ${s.work_hours_saved}시간입니다.</p>` : ''}
+    ${offers ? `<p class="muted">확인된 판매처 (가격순)</p><ul class="bd">${offers}</ul>`
+             : `<p class="muted">더 싼 판매처는 확인하지 못했습니다. 최저가라고 단정하지 않습니다.</p>`}`;
 }
 
 function renderVerdict(res) {
@@ -294,6 +347,7 @@ function renderVerdict(res) {
     ${claims ? `<p class="muted">주장 분해</p><ul class="bd">${claims}</ul>` : ''}
     <p class="muted">점수 근거 (LLM이 아니라 규칙표로 계산)</p>
     <ul class="bd">${bd || '<li>해당 항목 없음</li>'}</ul>
+    ${savingsBox(res.savings)}
     ${res.alternative && res.alternative.summary ? `<p class="muted">대안</p><p>${res.alternative.summary}</p>` : ''}
     ${res.follow_up_question ? `<p class="muted">에이전트의 되물음</p><p><b>${res.follow_up_question}</b></p>` : ''}
     ${res.agent_memories && res.agent_memories.length ? `<p class="muted">에이전트가 스스로 기록한 관찰</p><ul class="bd">${res.agent_memories.map(m=>`<li>${m.text} <span class="muted">(${m.confidence})</span></li>`).join('')}</ul>` : ''}

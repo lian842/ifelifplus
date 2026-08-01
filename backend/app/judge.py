@@ -165,6 +165,31 @@ def judge(
     }
 
 
+def savings_snapshot(case: dict[str, Any], profile: dict[str, Any],
+                     findings: dict[str, Any] | None) -> dict[str, Any]:
+    """5단계 — 안 샀을 때 / 더 싸게 샀을 때 아낄 수 있는 돈.
+
+    전부 산수다. 에이전트가 찾아온 가격을 그대로 쓰되 절약액 계산은 여기서 한다.
+    (에이전트에게 뺄셈을 맡기면 데모 중에 틀린 숫자가 화면에 뜬다)
+    """
+    price = int(case["product"].get("price") or 0)
+    findings = findings or {}
+    cheaper = int(findings.get("cheaper_price") or 0)
+    hourly = int(profile.get("hourly_wage") or 0)
+
+    cheaper_saving = price - cheaper if 0 < cheaper < price else 0
+    return {
+        "not_buying_saves": price,
+        "cheaper_price": cheaper if cheaper_saving else 0,
+        "cheaper_saves": cheaper_saving,
+        "offers": findings.get("offers") or [],
+        "annual_saving": int(findings.get("annual_saving") or 0),
+        "work_hours_saved": round(price / hourly, 1) if hourly else None,
+        "work_hours_saved_by_cheaper": round(cheaper_saving / hourly, 1)
+                                       if hourly and cheaper_saving else None,
+    }
+
+
 def budget_snapshot(case: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
     """개입 즉시 보여주는 숫자. LLM을 거치지 않는다."""
     price = int(case["product"].get("price") or 0)
@@ -176,6 +201,12 @@ def budget_snapshot(case: dict[str, Any], profile: dict[str, Any]) -> dict[str, 
     hourly = int(profile.get("hourly_wage") or 0)
 
     return {
+        "monthly_income": profile.get("monthly_income"),
+        "fixed_expenses": profile.get("fixed_expenses"),
+        # 고정지출 내역은 사실이라 그대로 준다. 반면 페르소나 설명("충동적이다" 같은)은
+        # 모델에게 주지 않는다. 그건 데이터에서 스스로 발견해야 하는 것이고,
+        # 미리 알려주면 사람을 규정하고 들어가는 개입이 된다.
+        "fixed_expense_items": profile.get("fixed_expense_items", []),
         "monthly_free_budget": free_budget,
         "spent_this_month": spent,
         "remaining": remaining,

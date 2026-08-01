@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-from . import autopilot, challenger, events, gates, judge, store  # noqa: E402
+from . import autopilot, challenger, events, gates, judge, sites, store  # noqa: E402
 
 STATIC = Path(__file__).resolve().parent / "static"
 
@@ -53,6 +53,7 @@ class Product(BaseModel):
     category: str = ""
     url: str = ""
     discount_text: str = ""
+    currency: str = ""  # 비우면 URL에서 사이트를 찾아 추론한다 (amazon.com → USD)
 
 
 class ObserveIn(BaseModel):
@@ -69,7 +70,11 @@ class CaseIn(BaseModel):
 
 
 class AnswerIn(BaseModel):
-    reason: str = Field(default="", description='"왜 지금 사야 합니까?"에 대한 사용자 답변 1회')
+    """3단계 응답. 객관식 선택 + 자유 입력 + 대안 탐색 Yes/No."""
+
+    selected_option_ids: list[str] = Field(default_factory=list, description="고른 선택지 id")
+    reason: str = Field(default="", description="자유 입력. 객관식만 골랐으면 빈 문자열")
+    want_alternatives: bool = Field(default=True, description='"다른 가격·상품을 찾아줄까요?"의 답')
 
 
 class ResolveIn(BaseModel):
@@ -133,6 +138,14 @@ async def create_case(body: CaseIn) -> dict[str, Any]:
     if not product.get("name"):
         product["name"] = "(상품 정보 추출 실패)"
 
+    # 어느 쇼핑몰인지 식별하고 가격을 원화로 정규화한다.
+    # 모르는 사이트여도 실패하지 않는다 — 예산 계산만 원화 기준으로 맞춘다.
+    site = sites.resolve(product.get("url"), int(product.get("price") or 0),
+                         product.get("currency") or None)
+    product["price"] = site["price_krw"]
+    product["price_original"] = site["price_original"]
+    product["currency"] = site["currency"]
+
     prior_hold = store.recent_hold_for(body.profile_id, product["name"])
 
     case: dict[str, Any] = {
@@ -146,6 +159,7 @@ async def create_case(body: CaseIn) -> dict[str, Any]:
         "page_text": body.page_text[:20000],
         "dark_patterns": gates.detect_dark_patterns(body.page_text),
         "payment_method_bnpl": body.payment_method_bnpl,
+        "site": site,
         "retry_of": prior_hold["case_id"] if prior_hold else None,
         "verdict": None,
         "release_at": None,
@@ -192,6 +206,7 @@ async def create_case(body: CaseIn) -> dict[str, Any]:
     base = {
         "case_id": case["case_id"],
         "intervene": True,          # 어떤 구매도 그냥 통과시키지 않는다
+        "site": site,
         "mode": mode["mode"],
         "no_friction": mode["no_friction"],
         "gate": mode["gate"],
@@ -215,7 +230,17 @@ async def create_case(body: CaseIn) -> dict[str, Any]:
                     case_id=case["case_id"])
         return {**base, "verdict": "PASS", "price_check": price, "agent_error": error}
 
-    return {**base, "verdict": None, "question": "왜 지금 사야 합니까?"}
+    # challenge: 3단계 질문을 에이전트가 설계한다. 객관식/주관식도 에이전트가 정한다.
+    question, q_error = await challenger.make_question(case, profile, classification)
+    case["question"] = question
+    store.save_case(case)
+    return {
+        **base,
+        "verdict": None,
+        "question": question,
+        "alternatives_prompt": "다른 가격이나 대안 상품을 찾아드릴까요?",
+        "question_error": q_error,
+    }
 
 
 # --------------------------------------------------------------------------
@@ -233,10 +258,23 @@ async def answer(case_id: str, body: AnswerIn) -> dict[str, Any]:
     if not case:
         raise HTTPException(404, "case not found")
     profile = store.get_profile(case["profile_id"])
-    case["user_reason"] = body.reason
+
+    # 객관식 선택과 자유 입력을 하나의 답변 문장으로 합친다.
+    question = case.get("question") or {}
+    chosen = [o["label"] for o in question.get("options", [])
+              if o["id"] in body.selected_option_ids]
+    parts = list(chosen)
+    if body.reason.strip():
+        parts.append(body.reason.strip())
+    user_reason = " / ".join(parts)
+
+    case["user_reason"] = user_reason
+    case["selected_options"] = chosen
+    case["want_alternatives"] = body.want_alternatives
 
     findings, ctx, error = await challenger.investigate(
-        case, profile, case.get("classification", {}), body.reason
+        case, profile, case.get("classification", {}), user_reason,
+        want_alternatives=body.want_alternatives,
     )
     case["findings"] = findings
     case["agent_error"] = error
@@ -270,6 +308,10 @@ async def answer(case_id: str, body: AnswerIn) -> dict[str, Any]:
             "found": (findings or {}).get("alternative_found", False),
             "summary": (findings or {}).get("alternative_summary", "대안을 찾지 못했습니다"),
         },
+        "savings": judge.savings_snapshot(case, profile, findings),
+        "question": case.get("question"),
+        "answered": {"selected": chosen, "free_text": body.reason,
+                     "want_alternatives": body.want_alternatives},
         "follow_up_question": (findings or {}).get("follow_up_question"),
         "agent_actions": ctx.applied_actions,
         "agent_memories": ctx.memories_written,
@@ -294,11 +336,16 @@ async def resolve(case_id: str, body: ResolveIn) -> dict[str, Any]:
     if not case:
         raise HTTPException(404, "case not found")
 
+    bought = False
     if body.action == "override":
+        # 보류를 무시하고 구매. 막지 않되 사유를 남긴다.
         case["override"] = {"happened": True, "reason": body.reason,
                             "at": store.iso(store.now())}
+        if body.reason.strip():
+            case["user_reason"] = ((case.get("user_reason") or "") + " / " + body.reason).strip(" /")
         case["resolved"] = True
         case["release_at"] = None
+        bought = True
         store.write_memory(
             case["profile_id"],
             f"'{case['product'].get('name')}' {case.get('verdict')} 판정을 무시하고 구매함. 사유: {body.reason}",
@@ -306,13 +353,31 @@ async def resolve(case_id: str, body: ResolveIn) -> dict[str, Any]:
         )
     else:
         case["accepted"] = {"at": store.iso(store.now())}
-        # 보류를 수용하면 release_at은 유지된다 → 스케줄러가 스스로 깨운다.
+        # PASS/WARN을 수용했다는 것은 그대로 결제했다는 뜻이다.
+        # HOLD/STRONG_HOLD를 수용했다면 사지 않은 것이고, release_at은 유지된다
+        # → 스케줄러가 사용자 입력 없이 스스로 깨어난다.
+        bought = case.get("verdict") in ("PASS", "WARN", None)
         if not case.get("release_at"):
             case["resolved"] = True
+
+    # 실제 구매는 이력에 남는다. 같은 물건을 또 사면 다음 개입이 그것을 안다.
+    if bought:
+        pid = store.record_purchase(case["profile_id"], case, body.action == "override")
+        case["recorded_purchase_id"] = pid
+
     store.save_case(case)
-    events.emit("system", {"step": "user_resolved", "action": body.action, "reason": body.reason},
-                case_id=case_id)
-    return {"ok": True, "case": case, "override_stats": store.override_stats(case["profile_id"])}
+    events.emit("system", {
+        "step": "user_resolved", "action": body.action, "reason": body.reason,
+        "purchase_recorded": bought,
+        "note": "구매가 이력에 기록되어 다음 개입의 조사 대상이 된다." if bought else None,
+    }, case_id=case_id)
+    return {
+        "ok": True,
+        "purchase_recorded": bought,
+        "case": case,
+        "override_stats": store.override_stats(case["profile_id"]),
+        "budget": judge.budget_snapshot(case, store.get_profile(case["profile_id"])),
+    }
 
 
 # --------------------------------------------------------------------------
@@ -321,15 +386,27 @@ async def resolve(case_id: str, body: ResolveIn) -> dict[str, Any]:
 
 @app.get("/api/profiles")
 async def profiles() -> dict[str, Any]:
-    return {
-        "profiles": [
-            {"profile_id": p["profile_id"], "label": p["label"],
-             "monthly_free_budget": p["monthly_free_budget"],
-             "spent_this_month": p["spent_this_month"]}
-            for p in store.PROFILES.values()
-        ],
-        "default": store.DEFAULT_PROFILE,
-    }
+    out = []
+    for pid in store.PROFILES:
+        p = store.get_profile(pid)  # 런타임 구매가 반영된 현재 상태
+        out.append({
+            "profile_id": p["profile_id"],
+            "label": p["label"],
+            "persona": p.get("persona"),
+            "monthly_income": p["monthly_income"],
+            "fixed_expenses": p["fixed_expenses"],
+            "monthly_free_budget": p["monthly_free_budget"],
+            "spent_this_month": p["spent_this_month"],
+            "remaining": p["monthly_free_budget"] - p["spent_this_month"],
+            "runtime_purchase_count": p["runtime_purchase_count"],
+        })
+    return {"profiles": out, "default": store.DEFAULT_PROFILE}
+
+
+@app.get("/api/sites")
+async def supported_sites() -> dict[str, Any]:
+    """지원 쇼핑몰 목록. 확장 프로그램이 어느 호스트에 주입할지 결정할 때 쓴다."""
+    return {"sites": sites.public_list(), "rates": sites.RATES}
 
 
 @app.get("/api/case/{case_id}")
