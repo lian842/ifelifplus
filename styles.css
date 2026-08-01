@@ -189,7 +189,7 @@ html.agent24-dialog-open { overflow: hidden !important; }
 }
 #agent24-purchase-guard .agent24-concept-result {
   min-height: 18px;
-  margin: 14px 0 0;
+  margin: 26px 0 0;
   color: rgba(68, 85, 94, .48);
   font-size: 13px;
   font-weight: 450;
@@ -266,11 +266,11 @@ html.agent24-dialog-open { overflow: hidden !important; }
   border-radius: 17px;
   background: #fff;
   box-shadow:
-    0 -8px 25px rgba(168, 180, 217, .22),
-    -18px 3px 34px rgba(190, 199, 226, .13),
-    22px 5px 36px rgba(151, 166, 210, .12),
-    0 22px 58px rgba(168, 180, 217, .065),
-    0 0 0 1px rgba(168, 180, 217, .11),
+    0 -9px 28px rgba(168, 180, 217, .3),
+    -20px 4px 38px rgba(190, 199, 226, .2),
+    24px 6px 40px rgba(151, 166, 210, .19),
+    0 24px 62px rgba(168, 180, 217, .11),
+    0 0 0 1px rgba(168, 180, 217, .17),
     inset 0 1px 0 #fff;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -282,10 +282,10 @@ html.agent24-dialog-open { overflow: hidden !important; }
   inset: -210px -240px -145px;
   border-radius: 0;
   background:
-    radial-gradient(ellipse 48% 43% at 44% 49%, rgba(168, 180, 217, .39) 0%, rgba(176, 187, 220, .22) 39%, rgba(168, 180, 217, .05) 70%, transparent 100%),
-    radial-gradient(ellipse 37% 43% at 12% 53%, rgba(190, 213, 232, .28) 0%, rgba(185, 204, 230, .13) 48%, rgba(183, 198, 226, .035) 73%, transparent 100%),
-    radial-gradient(ellipse 40% 39% at 91% 44%, rgba(188, 175, 218, .25) 0%, rgba(179, 171, 216, .12) 49%, rgba(168, 180, 217, .03) 74%, transparent 100%);
-  filter: blur(29px);
+    radial-gradient(ellipse 48% 43% at 44% 49%, rgba(168, 180, 217, .56) 0%, rgba(176, 187, 220, .3) 39%, rgba(168, 180, 217, .075) 70%, transparent 100%),
+    radial-gradient(ellipse 37% 43% at 12% 53%, rgba(190, 213, 232, .38) 0%, rgba(185, 204, 230, .19) 48%, rgba(183, 198, 226, .05) 73%, transparent 100%),
+    radial-gradient(ellipse 40% 39% at 91% 44%, rgba(188, 175, 218, .36) 0%, rgba(179, 171, 216, .18) 49%, rgba(168, 180, 217, .045) 74%, transparent 100%);
+  filter: blur(28px);
   content: "";
   pointer-events: none;
 }
