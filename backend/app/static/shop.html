@@ -113,6 +113,20 @@ let current = null, caseId = null;
 // 페이지 텍스트: 다크패턴 탐지 입력. 확장 프로그램에서는 document.body.innerText가 들어온다.
 const pageText = () => document.body.innerText;
 
+// DOM에서 직접 관찰되는 신호. 텍스트로는 "정기배송 신청"이라는 글자가 있다는 것까지만
+// 알 수 있고, 체크박스가 실제로 켜져 있는지는 여기서만 확정된다.
+// 실제 쇼핑몰에서는 확장 프로그램의 content script가 같은 일을 한다.
+function domSignals() {
+  const preselected = [...document.querySelectorAll('input[type=checkbox], input[type=radio]')]
+    .filter(el => el.checked && !el.closest('#ov') && el.id !== 'bnpl' && el.id !== 'wantAlt')
+    .map(el => {
+      const label = el.closest('label') || document.querySelector(`label[for="${el.id}"]`);
+      return (label ? label.innerText : el.name || el.id || 'unnamed').replace(/\s+/g, ' ').trim();
+    });
+  const timers = [...document.querySelectorAll('#timer')].map(e => e.textContent.trim());
+  return { preselected_inputs: preselected, countdown_timers: timers };
+}
+
 // ── 카운트다운(그 자체가 다크패턴이다) ──────────────────────────────
 let left = 299;
 setInterval(() => {
@@ -167,6 +181,7 @@ document.getElementById('pay').onclick = async () => {
   try {
     res = await post('/api/case', {
       profile_id: profileId(), product: prod(), page_text: pageText(),
+      dom_signals: domSignals(),
       dwell_minutes: Number(document.getElementById('dwell').value),
       payment_method_bnpl: document.getElementById('bnpl').checked,
     });
@@ -233,7 +248,9 @@ function numsBox(b) {
 // 3단계 — 질문. 객관식이냐 주관식이냐는 에이전트가 정해서 내려보낸다.
 function renderQuestion(res) {
   const q = res.question || {};
-  const dp = (res.dark_patterns||[]).map(d => `<li>${d.type} — “${d.evidence}”${d.verifiable ? '' : ' <span class="muted">(진위 확인 불가)</span>'}</li>`).join('');
+  const dp = (res.dark_patterns||[]).map(d => `<li>${d.type} — “${d.evidence}”` +
+    (d.confirmed ? ' <span class="muted">(DOM에서 직접 확인)</span>'
+                 : ' <span class="muted">(문구만 확인 · 진위 미확인)</span>') + '</li>').join('');
   const ov = res.override_stats || {};
   const opts = (q.options || []).map(o => `
     <label class="opt"><input type="checkbox" name="qopt" value="${o.id}">

@@ -61,10 +61,27 @@ class ObserveIn(BaseModel):
     product: Product
 
 
+class DomSignals(BaseModel):
+    """확장 프로그램이 DOM에서 직접 관찰한 것.
+
+    페이지 텍스트만으로는 '그런 문구가 있다'까지만 알 수 있다.
+    체크박스가 실제로 켜져 있는지 같은 것은 여기로 받아야 확정할 수 있다.
+    """
+
+    preselected_inputs: list[str] = Field(
+        default_factory=list,
+        description="기본 선택된 체크박스·라디오의 라벨. 예: ['안심 추가보증 3개월']",
+    )
+    countdown_timers: list[str] = Field(
+        default_factory=list, description="실제로 감소 중인 타이머의 텍스트",
+    )
+
+
 class CaseIn(BaseModel):
     profile_id: str = store.DEFAULT_PROFILE
     product: Product
     page_text: str = ""
+    dom_signals: DomSignals = Field(default_factory=DomSignals)
     dwell_minutes: int | None = None
     payment_method_bnpl: bool = False
 
@@ -163,7 +180,8 @@ async def create_case(body: CaseIn) -> dict[str, Any]:
         "created_at": store.iso(now),
         "dwell_minutes": dwell,
         "page_text": body.page_text[:20000],
-        "dark_patterns": gates.detect_dark_patterns(body.page_text),
+        "dark_patterns": gates.detect_dark_patterns(body.page_text, body.dom_signals.model_dump()),
+        "dom_signals": body.dom_signals.model_dump(),
         "payment_method_bnpl": body.payment_method_bnpl,
         "site": site,
         "retry_of": prior_hold["case_id"] if prior_hold else None,
