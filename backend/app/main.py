@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-from . import autopilot, challenger, events, gates, judge, sites, store  # noqa: E402
+from . import autopilot, challenger, events, gates, judge, profiler, sites, store  # noqa: E402
 
 STATIC = Path(__file__).resolve().parent / "static"
 
@@ -92,14 +92,20 @@ async def _startup() -> None:
     if not os.getenv("OPENAI_API_KEY"):
         events.emit("system", {"step": "warning",
                                "message": "OPENAI_API_KEY 없음. Gate 0/1은 동작하지만 에이전트 조사는 실패한다."})
+    # 두 루프 모두 사용자 입력 없이 돈다.
+    #  scheduler : 보류된 사건의 재검토 시각이 되면 스스로 깨어난다
+    #  profiler  : 결제와 무관하게 주기적으로 소비 데이터를 훑고 메모리를 갱신한다
     app.state.scheduler = asyncio.create_task(autopilot.loop())
+    app.state.profiler = (asyncio.create_task(profiler.loop())
+                          if os.getenv("ULYSSES_PROFILER", "1") == "1" else None)
 
 
 @app.on_event("shutdown")
 async def _shutdown() -> None:
-    task = getattr(app.state, "scheduler", None)
-    if task:
-        task.cancel()
+    for name in ("scheduler", "profiler"):
+        task = getattr(app.state, name, None)
+        if task:
+            task.cancel()
 
 
 # --------------------------------------------------------------------------
@@ -422,7 +428,19 @@ async def memory(profile_id: str) -> dict[str, Any]:
     return {
         "observations": store.read_memory(profile_id, limit=50),
         "override_stats": store.override_stats(profile_id),
+        "file": profiler.dump_memory_file(profile_id),
+        "purchases_recorded": store.runtime_purchases(profile_id),
     }
+
+
+@app.post("/api/memory/{profile_id}/scan")
+async def memory_scan(profile_id: str) -> dict[str, Any]:
+    """1단계 상시 스캔을 즉시 1회 실행한다.
+
+    평소에는 백그라운드에서 주기적으로 돈다. 이 엔드포인트는 데모에서
+    '개입이 없어도 에이전트가 학습하고 있다'를 보여주기 위한 것이다.
+    """
+    return await profiler.scan(profile_id)
 
 
 @app.get("/api/scoring")
