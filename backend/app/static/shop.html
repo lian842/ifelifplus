@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>바로마켓 — 오늘만 특가</title>
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+         background:#f5f6f8; color:#1a1a1a; }
+  header { background:#fff; border-bottom:1px solid #e5e7eb; padding:12px 20px; display:flex; align-items:center; gap:16px; }
+  .logo { font-weight:800; font-size:18px; color:#e8380d; }
+  .devbar { background:#111; color:#ddd; font:12px ui-monospace,monospace; padding:8px 20px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .devbar select, .devbar input, .devbar button { font:12px ui-monospace,monospace; }
+  .devbar button { background:#333; color:#eee; border:1px solid #555; padding:4px 8px; border-radius:4px; cursor:pointer; }
+  .devbar a { color:#4a9eff; }
+  .banner { background:linear-gradient(90deg,#e8380d,#ff7a3d); color:#fff; padding:10px 20px; font-weight:700; display:flex; gap:12px; align-items:center; }
+  main { max-width:960px; margin:20px auto; padding:0 16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:14px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:14px; cursor:pointer; }
+  .card:hover { border-color:#e8380d; }
+  .card h3 { margin:0 0 6px; font-size:14px; }
+  .price { font-size:18px; font-weight:800; }
+  .strike { color:#9ca3af; text-decoration:line-through; font-size:12px; }
+  .tag { display:inline-block; background:#fee2e2; color:#b91c1c; font-size:11px; padding:2px 6px; border-radius:4px; margin-bottom:6px; }
+  .panel { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:18px; margin-top:16px; }
+  .row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed #eee; font-size:14px; }
+  .btn { background:#e8380d; color:#fff; border:0; border-radius:8px; padding:12px 18px; font-size:15px; font-weight:700; cursor:pointer; width:100%; margin-top:12px; }
+  .muted { color:#6b7280; font-size:12px; }
+  /* --- 개입 오버레이 --- */
+  #ov { position:fixed; inset:0; background:rgba(10,12,20,.72); display:none; align-items:center; justify-content:center; z-index:9999; padding:16px; }
+  #ov.on { display:flex; }
+  .modal { background:#fff; border-radius:14px; width:min(560px,100%); max-height:88vh; overflow:auto; padding:22px; }
+  .modal h2 { margin:4px 0 2px; font-size:19px; }
+  .kicker { font-size:11px; letter-spacing:.08em; color:#e8380d; font-weight:800; }
+  .nums { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:14px 0; }
+  .num { background:#f8f9fb; border-radius:8px; padding:10px; text-align:center; }
+  .num b { display:block; font-size:16px; }
+  .num span { font-size:11px; color:#6b7280; }
+  .neg { color:#b91c1c; }
+  textarea { width:100%; min-height:76px; border:1px solid #d1d5db; border-radius:8px; padding:10px; font:14px inherit; }
+  .verdict { border-radius:10px; padding:12px; margin:12px 0; font-weight:700; }
+  .v-PASS { background:#dcfce7; color:#166534; } .v-WARN { background:#fef9c3; color:#854d0e; }
+  .v-HOLD { background:#ffedd5; color:#9a3412; } .v-STRONG_HOLD { background:#fee2e2; color:#991b1b; }
+  ul.bd { margin:8px 0; padding-left:18px; font-size:13px; color:#374151; }
+  .actions { display:flex; gap:8px; margin-top:14px; flex-wrap:wrap; }
+  .actions button { flex:1; min-width:130px; border-radius:8px; padding:11px; font-weight:700; cursor:pointer; border:1px solid #d1d5db; background:#fff; }
+  .actions .primary { background:#111827; color:#fff; border-color:#111827; }
+  .spinner { font-size:13px; color:#6b7280; }
+  code.small { font-size:11px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">바로마켓</div>
+  <div class="muted">목업 쇼핑몰 · 다크패턴이 의도적으로 포함되어 있습니다</div>
+</header>
+
+<div class="devbar">
+  <span>DEMO</span>
+  <label>프로필 <select id="profile"></select></label>
+  <label>dwell(분) <input id="dwell" type="number" value="3" style="width:70px"></label>
+  <label><input type="checkbox" id="bnpl"> 무이자 할부/후불결제</label>
+  <button id="wake">⏰ 자율 재검토 즉시 발화</button>
+  <button id="reset">reset</button>
+  <a href="/viewer" target="_blank">→ RAW 스트림 뷰어</a>
+</div>
+
+<div class="banner">
+  <span id="timer">⏳ 특가 마감까지 00:04:59</span>
+  <span>· 오늘만 이 가격 · 재고 3개 남음</span>
+</div>
+
+<main>
+  <div class="grid" id="grid"></div>
+  <div class="panel" id="checkout" style="display:none">
+    <h2 id="coName"></h2>
+    <div class="row"><span>상품 금액</span><b id="coPrice"></b></div>
+    <div class="row"><span>배송비 <span class="muted">(결제 시 추가)</span></span><b>+3,000원</b></div>
+    <div class="row"><span><input type="checkbox" id="warranty" checked> 안심 추가보증 3개월</span><b>+4,900원</b></div>
+    <div class="row"><span>최종 결제 금액</span><b id="coTotal"></b></div>
+    <p class="muted" id="coDwell"></p>
+    <button class="btn" id="pay">결제하기</button>
+  </div>
+</main>
+
+<div id="ov"><div class="modal" id="modal"></div></div>
+
+<script>
+const API = location.origin;
+const PRODUCTS = [
+  { name:"제주 삼다수 2L x 6병", price:7900, category:"water", tag:"생필품", was:9900 },
+  { name:"한정판 보온 텀블러 500ml", price:69000, category:"tumbler", tag:"오늘만 30%", was:99000 },
+  { name:"타이레놀 500mg 30정", price:8900, category:"medicine", tag:"의약품", was:0 },
+  { name:"모나미 볼펜 3자루", price:1200, category:"stationery", tag:"", was:0 },
+  { name:"게이밍 노트북 RTX4070", price:2190000, category:"laptop", tag:"12개월 무이자", was:2490000 },
+  { name:"러닝화 에어줌 페가수스", price:139000, category:"shoes", tag:"재고 3개", was:169000 },
+];
+
+let current = null, caseId = null;
+
+// 페이지 텍스트: 다크패턴 탐지 입력. 확장 프로그램에서는 document.body.innerText가 들어온다.
+const pageText = () => document.body.innerText;
+
+// ── 카운트다운(그 자체가 다크패턴이다) ──────────────────────────────
+let left = 299;
+setInterval(() => {
+  left = left > 0 ? left - 1 : 299;
+  const m = String(Math.floor(left/60)).padStart(2,'0'), s = String(left%60).padStart(2,'0');
+  document.getElementById('timer').textContent = `⏳ 특가 마감까지 00:${m}:${s}`;
+}, 1000);
+
+const won = (n) => (n||0).toLocaleString('ko-KR') + '원';
+
+function renderGrid() {
+  document.getElementById('grid').innerHTML = PRODUCTS.map((p,i) => `
+    <div class="card" onclick="select(${i})">
+      ${p.tag ? `<span class="tag">${p.tag}</span>` : ''}
+      <h3>${p.name}</h3>
+      ${p.was ? `<div class="strike">${won(p.was)}</div>` : ''}
+      <div class="price">${won(p.price)}</div>
+    </div>`).join('');
+}
+
+async function select(i) {
+  current = PRODUCTS[i];
+  caseId = null;
+  document.getElementById('checkout').style.display = '';
+  document.getElementById('coName').textContent = current.name;
+  document.getElementById('coPrice').textContent = won(current.price);
+  document.getElementById('coTotal').textContent = won(current.price + 3000 + (document.getElementById('warranty').checked ? 4900 : 0));
+  document.getElementById('coDwell').textContent = '이 상품 페이지를 관찰하기 시작했습니다. (개입 없음)';
+  document.getElementById('checkout').scrollIntoView({behavior:'smooth'});
+  // 관찰 단계 — 개입하지 않고 detected_at만 남긴다
+  await post('/api/observe', { profile_id: profileId(), product: prod() });
+}
+
+const profileId = () => document.getElementById('profile').value;
+const prod = () => ({
+  name: current.name, price: current.price, category: current.category,
+  url: location.href, discount_text: current.tag || ''
+});
+
+async function post(path, body) {
+  const r = await fetch(API + path, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body || {})
+  });
+  return r.json();
+}
+
+// ── 결제 버튼 = 트리거 ────────────────────────────────────────────
+document.getElementById('pay').onclick = async () => {
+  openModal(`<div class="kicker">ULYSSES</div><h2>확인 중…</h2><p class="spinner">Gate 0 / Gate 1 판정 중 (LLM 호출 없음)</p>`);
+  let res;
+  try {
+    res = await post('/api/case', {
+      profile_id: profileId(), product: prod(), page_text: pageText(),
+      dwell_minutes: Number(document.getElementById('dwell').value),
+      payment_method_bnpl: document.getElementById('bnpl').checked,
+    });
+  } catch (e) { return openModal(errBox('백엔드에 연결하지 못했습니다.', e)); }
+
+  caseId = res.case_id;
+  if (!res.intervene) return renderPass(res);
+  renderQuestion(res);
+};
+
+function openModal(html) { document.getElementById('modal').innerHTML = html; document.getElementById('ov').classList.add('on'); }
+function closeModal() { document.getElementById('ov').classList.remove('on'); }
+const errBox = (m,e) => `<div class="kicker">ULYSSES</div><h2>${m}</h2><p class="muted">${e}</p>
+  <div class="actions"><button class="primary" onclick="closeModal()">닫기</button></div>`;
+
+function renderPass(res) {
+  openModal(`
+    <div class="kicker">ULYSSES · GATE ${res.gate}</div>
+    <h2>확인했습니다. 구매하세요.</h2>
+    <p>${res.message}</p>
+    <p class="muted">LLM을 호출하지 않았습니다. 이 구매는 이례적이지 않습니다.</p>
+    <div class="actions"><button class="primary" onclick="closeModal()">구매 계속</button></div>`);
+}
+
+function numsBox(b) {
+  const neg = (v) => v < 0 ? 'neg' : '';
+  return `<div class="nums">
+    <div class="num"><b class="${neg(b.after_purchase)}">${won(b.after_purchase)}</b><span>구매 후 자유 금액</span></div>
+    <div class="num"><b>D-${b.days_until_payday}</b><span>급여일까지</span></div>
+    <div class="num"><b class="${neg(b.after_upcoming)}">${won(b.upcoming_total)}</b><span>예정 지출 ${b.upcoming_events.length}건</span></div>
+  </div>`;
+}
+
+function renderQuestion(res) {
+  const dp = (res.dark_patterns||[]).map(d => `<li>${d.type} — “${d.evidence}”${d.verifiable ? '' : ' <span class="muted">(진위 확인 불가)</span>'}</li>`).join('');
+  const ov = res.override_stats || {};
+  openModal(`
+    <div class="kicker">ULYSSES · 결제 직전 개입</div>
+    <h2>${res.question}</h2>
+    ${numsBox(res.budget)}
+    ${dp ? `<p class="muted">이 페이지에서 탐지된 눈속임 설계</p><ul class="bd">${dp}</ul>` : ''}
+    ${ov.overrides_last_30d ? `<p class="muted">최근 30일간 보류 판정을 ${ov.overrides_last_30d}회 무시했고 총 ${won(ov.override_amount)}입니다.</p>` : ''}
+    <textarea id="reason" placeholder="예: 다음 주 등산 갈 때 쓸 건데 기존 텀블러는 500ml가 안 돼요"></textarea>
+    <p class="muted">답변은 여기 한 번만 받습니다. 이후 조사·판정은 에이전트가 스스로 진행합니다.</p>
+    <div class="actions">
+      <button class="primary" onclick="sendAnswer()">조사 시작</button>
+      <button onclick="closeModal()">결제 취소</button>
+    </div>`);
+}
+
+async function sendAnswer() {
+  const reason = document.getElementById('reason').value;
+  openModal(`<div class="kicker">ULYSSES</div><h2>조사 중…</h2>
+    <p class="spinner">에이전트가 주장을 분해하고 필요한 도구를 스스로 고르는 중입니다.<br>
+    <a href="/viewer" target="_blank">RAW 스트림 뷰어</a>에서 tool_call을 실시간으로 확인하세요.</p>`);
+  let res;
+  try { res = await post(`/api/case/${caseId}/answer`, { reason }); }
+  catch (e) { return openModal(errBox('조사에 실패했습니다.', e)); }
+  renderVerdict(res);
+}
+
+function renderVerdict(res) {
+  const bd = (res.breakdown||[]).map(b => `<li>${b.label} <b>${b.points > 0 ? '+' : ''}${b.points}</b></li>`).join('');
+  const claims = (res.claims||[]).map(c => `<li>[${c.type}] ${c.text} → <b>${c.status}</b>${c.evidence ? ` <span class="muted">${c.evidence}</span>` : ''}</li>`).join('');
+  const holdTxt = res.hold_minutes ? `${res.hold_minutes >= 60 ? (res.hold_minutes/60)+'시간' : res.hold_minutes+'분'} 보류` : '';
+  openModal(`
+    <div class="kicker">ULYSSES · 규칙 엔진 판정</div>
+    <div class="verdict v-${res.verdict}">${res.verdict}${holdTxt ? ' · ' + holdTxt : ''} <span style="float:right">위험 점수 ${res.risk_score}</span></div>
+    <p>${res.summary || ''}</p>
+    ${res.capped_reason ? `<p class="muted">${res.capped_reason}</p>` : ''}
+    ${claims ? `<p class="muted">주장 분해</p><ul class="bd">${claims}</ul>` : ''}
+    <p class="muted">점수 근거 (LLM이 아니라 규칙표로 계산)</p>
+    <ul class="bd">${bd || '<li>해당 항목 없음</li>'}</ul>
+    ${res.alternative && res.alternative.summary ? `<p class="muted">대안</p><p>${res.alternative.summary}</p>` : ''}
+    ${res.follow_up_question ? `<p class="muted">에이전트의 되물음</p><p><b>${res.follow_up_question}</b></p>` : ''}
+    ${res.agent_memories && res.agent_memories.length ? `<p class="muted">에이전트가 스스로 기록한 관찰</p><ul class="bd">${res.agent_memories.map(m=>`<li>${m.text} <span class="muted">(${m.confidence})</span></li>`).join('')}</ul>` : ''}
+    ${res.release_at ? `<p class="muted">재검토 예약: <code class="small">${res.release_at}</code> — 이 시각이 되면 <b>사용자 입력 없이</b> 에이전트가 스스로 깨어납니다.</p>` : ''}
+    ${res.agent_error ? `<p class="muted">에이전트 오류: <code class="small">${res.agent_error}</code></p>` : ''}
+    <div class="actions">
+      <button class="primary" onclick="resolveCase('accept')">${res.verdict === 'PASS' ? '구매 계속' : '판정 수용'}</button>
+      <button onclick="askOverride()">그래도 지금 구매</button>
+    </div>`);
+}
+
+function askOverride() {
+  openModal(`<div class="kicker">ULYSSES</div><h2>구매를 막지 않습니다.</h2>
+    <p>최종 결정은 항상 당신에게 있습니다. 다만 한 문장만 남겨주세요. 이 문장은 다음 개입에서 그대로 인용됩니다.</p>
+    <textarea id="ovr" placeholder="지금 사는 이유"></textarea>
+    <div class="actions">
+      <button class="primary" onclick="resolveCase('override')">기록하고 구매</button>
+      <button onclick="closeModal()">취소</button>
+    </div>`);
+}
+
+async function resolveCase(action) {
+  const el = document.getElementById('ovr');
+  await post(`/api/case/${caseId}/resolve`, { action, reason: el ? el.value : '' });
+  closeModal();
+}
+
+// ── 데모 스위치 ────────────────────────────────────────────────────
+document.getElementById('wake').onclick = async () => {
+  openModal(`<div class="kicker">ULYSSES · 자율 재실행</div><h2>에이전트가 스스로 깨어났습니다</h2>
+    <p class="spinner">사용자 입력 0회. 예약된 재검토 시각이 도달한 것으로 처리했습니다.<br>
+    <a href="/viewer" target="_blank">RAW 스트림 뷰어</a>에서 확인하세요.</p>`);
+  const r = await post('/api/dev/wake', {});
+  const items = (r.results||[]).map(x => `<li><code class="small">${x.case_id}</code> → <b>${x.outcome.decision}</b><br>${x.outcome.message}<br><span class="muted">가격 확인: ${x.outcome.price_note}</span></li>`).join('');
+  openModal(`<div class="kicker">ULYSSES · 자율 재실행 결과</div>
+    <h2>${r.triggered}건 재검토 완료</h2>
+    <p class="muted">아무도 아무것도 누르지 않았습니다.</p>
+    <ul class="bd">${items || '<li>재검토 대상 사건이 없습니다. 먼저 HOLD 판정을 하나 만드세요.</li>'}</ul>
+    <div class="actions"><button class="primary" onclick="closeModal()">닫기</button></div>`);
+};
+
+document.getElementById('reset').onclick = async () => { await post('/api/dev/reset', {}); location.reload(); };
+document.getElementById('warranty').onchange = () => { if (current) select(PRODUCTS.indexOf(current)); };
+
+(async () => {
+  renderGrid();
+  const p = await (await fetch(API + '/api/profiles')).json();
+  document.getElementById('profile').innerHTML = p.profiles.map(x => `<option value="${x.profile_id}">${x.label}</option>`).join('');
+  document.getElementById('profile').value = p.default;
+})();
+</script>
+</body>
+</html>
