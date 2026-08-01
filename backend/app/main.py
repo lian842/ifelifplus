@@ -408,6 +408,17 @@ async def resolve(case_id: str, body: ResolveIn) -> dict[str, Any]:
 # 조회
 # --------------------------------------------------------------------------
 
+@app.get("/api/tips")
+async def tips(age: int = 20, limit: int = 3) -> dict[str, Any]:
+    """로딩 화면용 경제 팁.
+
+    초기에는 20대 팁만 시드되어 있다. 모집 시기처럼 변하는 정보는 본문에
+    고정하지 않고, 사용자가 공식 공고를 확인할 수 있는 출처만 함께 돌려준다.
+    """
+    safe_age = max(0, min(int(age), 120))
+    return {"age": safe_age, "tips": store.tips_for_age(safe_age, limit)}
+
+
 @app.get("/api/profiles")
 async def profiles() -> dict[str, Any]:
     out = []
