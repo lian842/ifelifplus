@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>Ulysses · RAW tool_call / tool_result stream</title>
+<style>
+  body { background:#0b0b0b; color:#d6d6d6; font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace; margin:0; }
+  header { position:sticky; top:0; background:#141414; border-bottom:1px solid #2a2a2a; padding:8px 12px; }
+  h1 { font-size:13px; margin:0 0 4px; color:#fff; font-weight:600; }
+  .sub { color:#7a7a7a; }
+  label { margin-right:14px; color:#9a9a9a; cursor:pointer; }
+  #log { padding:8px 12px; }
+  .ev { border-left:3px solid #333; padding:4px 0 4px 8px; margin-bottom:6px; }
+  .meta { color:#6f6f6f; }
+  .ch { font-weight:700; padding:0 4px; }
+  pre { margin:2px 0 0; white-space:pre-wrap; word-break:break-all; color:#c8c8c8; }
+  .tool_call    { border-left-color:#f0a500; } .tool_call .ch    { color:#f0a500; }
+  .tool_result  { border-left-color:#38b000; } .tool_result .ch  { color:#38b000; }
+  .raw_response { border-left-color:#2f2f2f; } .raw_response .ch { color:#6f6f6f; }
+  .system       { border-left-color:#4a9eff; } .system .ch       { color:#4a9eff; }
+  .message      { border-left-color:#b56cff; } .message .ch      { color:#b56cff; }
+  #status { color:#38b000; }
+</style>
+</head>
+<body>
+<header>
+  <h1>RAW OpenAI event stream — 가공 없음 (envelope: seq/ts/elapsed_ms/channel, 내용은 <code>raw</code>에 원본 그대로)</h1>
+  <div class="sub">
+    <span id="status">connecting…</span> ·
+    <span id="count">0</span> events ·
+    <label><input type="checkbox" id="hideDelta" checked> delta 이벤트 숨기기(클라이언트 필터)</label>
+    <label><input type="checkbox" id="onlyTools"> tool_call / tool_result만</label>
+    <label><input type="checkbox" id="follow" checked> 자동 스크롤</label>
+    <button id="clear">clear</button>
+  </div>
+</header>
+<div id="log"></div>
+<script>
+const log = document.getElementById('log');
+const countEl = document.getElementById('count');
+const statusEl = document.getElementById('status');
+let n = 0;
+
+const isDelta = (e) => {
+  const t = e.raw && e.raw.type;
+  return typeof t === 'string' && (t.endsWith('.delta') || t.endsWith('.done') || t.endsWith('.added'));
+};
+
+function visible(e) {
+  if (document.getElementById('onlyTools').checked && !['tool_call','tool_result'].includes(e.channel)) return false;
+  if (document.getElementById('hideDelta').checked && isDelta(e)) return false;
+  return true;
+}
+
+function render(e) {
+  const div = document.createElement('div');
+  div.className = 'ev ' + e.channel;
+  div.dataset.delta = isDelta(e) ? '1' : '0';
+  div.dataset.channel = e.channel;
+  const type = (e.raw && e.raw.type) || (e.raw && e.raw.name) || '';
+  div.innerHTML =
+    `<div class="meta">#${e.seq} <span class="ch">${e.channel}</span> ${type} · ${e.ts} · +${e.elapsed_ms}ms${e.case_id ? ' · ' + e.case_id : ''}</div>`
+    + `<pre>${JSON.stringify(e.raw, null, 2).replace(/</g,'&lt;')}</pre>`;
+  div.style.display = visible(e) ? '' : 'none';
+  log.appendChild(div);
+  n++; countEl.textContent = n;
+  if (document.getElementById('follow').checked) window.scrollTo(0, document.body.scrollHeight);
+}
+
+function refilter() {
+  for (const div of log.children) {
+    const fake = { channel: div.dataset.channel, raw: { type: div.dataset.delta === '1' ? 'x.delta' : 'x' } };
+    div.style.display = visible(fake) ? '' : 'none';
+  }
+}
+document.getElementById('hideDelta').onchange = refilter;
+document.getElementById('onlyTools').onchange = refilter;
+document.getElementById('clear').onclick = () => { log.innerHTML=''; n=0; countEl.textContent=0; };
+
+const es = new EventSource('/api/stream');
+es.onopen = () => { statusEl.textContent = 'connected'; statusEl.style.color = '#38b000'; };
+es.onerror = () => { statusEl.textContent = 'disconnected — retrying'; statusEl.style.color = '#ff5a5a'; };
+es.onmessage = (m) => { try { render(JSON.parse(m.data)); } catch (err) { console.error(err, m.data); } };
+</script>
+</body>
+</html>

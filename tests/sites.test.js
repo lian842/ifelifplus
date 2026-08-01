@@ -70,7 +70,7 @@ test("loads the site config before the purchase guard on every host", () => {
   const contentScript = manifest.content_scripts[0];
 
   assert.equal(manifest.version, "0.4.0");
-  assert.equal(manifest.permissions, undefined);
+  assert.deepEqual(manifest.permissions, ["storage"]);
   assert.deepEqual(contentScript.js, ["sites.js", "content.js"]);
   assert.deepEqual(contentScript.matches, [
     "https://*.coupang.com/*",
@@ -95,6 +95,105 @@ test("matches checkout routes", () => {
   const baemin = findSite("order.baemin.com");
   assert.equal(matchesPath(baemin.checkoutPaths, "https://order.baemin.com/quick"), true);
   assert.equal(matchesPath(baemin.checkoutPaths, "https://order.baemin.com/family"), true);
+});
+
+test("recognizes Coupang's verified cart route and checkout control", () => {
+  const coupang = findSite("cart.coupang.com");
+
+  assert.equal(
+    matchesPath(coupang.cartPaths, "https://cart.coupang.com/cartView.pang"),
+    true,
+  );
+  assert.equal(coupang.cartCheckoutSelector, "a#btnPay.goPayment[role='button']");
+  assert.equal(typeof coupang.scrapeCartItems, "function");
+});
+
+test("scrapes a selected Coupang cart row without mixing its fields", () => {
+  const coupang = findSite("cart.coupang.com");
+  const priceNode = {
+    textContent: "39,920",
+    nextElementSibling: { textContent: "원" },
+  };
+  const priceArea = {
+    querySelectorAll(selector) {
+      assert.equal(selector, "span");
+      return [{ textContent: "24%", nextElementSibling: null }, priceNode];
+    },
+  };
+  const quantityInput = { value: "2" };
+  const row = {
+    querySelector(selector) {
+      if (selector === '[data-component-id="price-area"]') return priceArea;
+      if (selector === ".cart-quantity-input") return quantityInput;
+      return null;
+    },
+    querySelectorAll(selector) {
+      return selector === '[data-component-id="price-area"]' ? [priceArea] : [];
+    },
+  };
+  const checkbox = {
+    parentElement: row,
+    getAttribute(name) {
+      return name === "title" ? "Machenike 메카닉 L9X1" : null;
+    },
+  };
+  const previousDocument = global.document;
+  global.document = {
+    querySelectorAll(selector) {
+      assert.equal(selector, 'input[type="checkbox"][title]:checked');
+      return [checkbox];
+    },
+  };
+
+  try {
+    assert.deepEqual(coupang.scrapeCartItems(), [
+      { name: "Machenike 메카닉 L9X1", price: 39920, quantity: 2 },
+    ]);
+  } finally {
+    global.document = previousDocument;
+  }
+});
+
+test("does not count duplicate responsive Coupang cart rows", () => {
+  const coupang = findSite("cart.coupang.com");
+  const priceNode = {
+    textContent: "39,920",
+    nextElementSibling: { textContent: "원" },
+  };
+  const priceArea = {
+    querySelectorAll() {
+      return [{ textContent: "24%", nextElementSibling: null }, priceNode];
+    },
+  };
+  const row = () => ({
+    querySelector(selector) {
+      if (selector === '[data-component-id="price-area"]') return priceArea;
+      if (selector === ".cart-quantity-input") return { value: "1" };
+      if (selector === 'a[href*="/vp/products/"]') {
+        return { getAttribute: () => "/vp/products/123?vendorItemId=456" };
+      }
+      return null;
+    },
+    querySelectorAll() {
+      return [priceArea];
+    },
+  });
+  const checkbox = () => ({
+    parentElement: row(),
+    getAttribute() {
+      return "중복 렌더링 상품";
+    },
+  });
+  const previousDocument = global.document;
+  global.document = { querySelectorAll: () => [checkbox(), checkbox()] };
+
+  try {
+    assert.deepEqual(coupang.scrapeCartItems(), [
+      { name: "중복 렌더링 상품", price: 39920, quantity: 1 },
+    ]);
+  } finally {
+    global.document = previousDocument;
+  }
 });
 
 test("does not confuse browsing or history routes with checkout", () => {

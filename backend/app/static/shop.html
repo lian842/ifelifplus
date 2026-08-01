@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>바로마켓 — 오늘만 특가</title>
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+         background:#f5f6f8; color:#1a1a1a; }
+  header { background:#fff; border-bottom:1px solid #e5e7eb; padding:12px 20px; display:flex; align-items:center; gap:16px; }
+  .logo { font-weight:800; font-size:18px; color:#e8380d; }
+  .devbar { background:#111; color:#ddd; font:12px ui-monospace,monospace; padding:8px 20px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .devbar select, .devbar input, .devbar button { font:12px ui-monospace,monospace; }
+  .devbar button { background:#333; color:#eee; border:1px solid #555; padding:4px 8px; border-radius:4px; cursor:pointer; }
+  .devbar a { color:#4a9eff; }
+  .banner { background:linear-gradient(90deg,#e8380d,#ff7a3d); color:#fff; padding:10px 20px; font-weight:700; display:flex; gap:12px; align-items:center; }
+  main { max-width:960px; margin:20px auto; padding:0 16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:14px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:14px; cursor:pointer; }
+  .card:hover { border-color:#e8380d; }
+  .card h3 { margin:0 0 6px; font-size:14px; }
+  .price { font-size:18px; font-weight:800; }
+  .strike { color:#9ca3af; text-decoration:line-through; font-size:12px; }
+  .tag { display:inline-block; background:#fee2e2; color:#b91c1c; font-size:11px; padding:2px 6px; border-radius:4px; margin-bottom:6px; }
+  .panel { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:18px; margin-top:16px; }
+  .row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed #eee; font-size:14px; }
+  .btn { background:#e8380d; color:#fff; border:0; border-radius:8px; padding:12px 18px; font-size:15px; font-weight:700; cursor:pointer; width:100%; margin-top:12px; }
+  .muted { color:#6b7280; font-size:12px; }
+  /* --- 개입 오버레이 --- */
+  #ov { position:fixed; inset:0; background:rgba(10,12,20,.72); display:none; align-items:center; justify-content:center; z-index:9999; padding:16px; }
+  #ov.on { display:flex; }
+  .modal { background:#fff; border-radius:14px; width:min(560px,100%); max-height:88vh; overflow:auto; padding:22px; }
+  .modal h2 { margin:4px 0 2px; font-size:19px; }
+  .kicker { font-size:11px; letter-spacing:.08em; color:#e8380d; font-weight:800; }
+  .nums { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:14px 0; }
+  .num { background:#f8f9fb; border-radius:8px; padding:10px; text-align:center; }
+  .num b { display:block; font-size:16px; }
+  .num span { font-size:11px; color:#6b7280; }
+  .neg { color:#b91c1c; }
+  textarea { width:100%; min-height:76px; border:1px solid #d1d5db; border-radius:8px; padding:10px; font:14px inherit; }
+  .verdict { border-radius:10px; padding:12px; margin:12px 0; font-weight:700; }
+  .v-PASS { background:#dcfce7; color:#166534; } .v-WARN { background:#fef9c3; color:#854d0e; }
+  .v-HOLD { background:#ffedd5; color:#9a3412; } .v-STRONG_HOLD { background:#fee2e2; color:#991b1b; }
+  ul.bd { margin:8px 0; padding-left:18px; font-size:13px; color:#374151; }
+  .actions { display:flex; gap:8px; margin-top:14px; flex-wrap:wrap; }
+  .actions button { flex:1; min-width:130px; border-radius:8px; padding:11px; font-weight:700; cursor:pointer; border:1px solid #d1d5db; background:#fff; }
+  .actions .primary { background:#111827; color:#fff; border-color:#111827; }
+  .spinner { font-size:13px; color:#6b7280; }
+  .opts { display:flex; flex-direction:column; gap:6px; margin:10px 0; }
+  .opt { display:flex; align-items:center; gap:8px; border:1px solid #e5e7eb; border-radius:8px;
+         padding:10px 12px; cursor:pointer; font-size:14px; }
+  .opt:hover { border-color:#111827; }
+  .opt:has(input:checked) { border-color:#111827; background:#f3f4f6; }
+  .opt span { flex:1; }
+  .opt em { font-style:normal; font-size:11px; color:#9ca3af; }
+  .yn { display:flex; align-items:center; gap:8px; margin:12px 0 4px; font-size:14px;
+        background:#f8f9fb; border-radius:8px; padding:10px 12px; cursor:pointer; }
+  code.small { font-size:11px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">바로마켓</div>
+  <div class="muted">목업 쇼핑몰 · 다크패턴이 의도적으로 포함되어 있습니다</div>
+</header>
+
+<div class="devbar">
+  <span>DEMO</span>
+  <label>프로필 <select id="profile"></select></label>
+  <label>dwell(분) <input id="dwell" type="number" value="3" style="width:70px"></label>
+  <label><input type="checkbox" id="bnpl"> 무이자 할부/후불결제</label>
+  <button id="wake">⏰ 자율 재검토 즉시 발화</button>
+  <button id="reset">reset</button>
+  <a href="/viewer" target="_blank">→ RAW 스트림 뷰어</a>
+</div>
+
+<div class="banner">
+  <span id="timer">⏳ 특가 마감까지 00:04:59</span>
+  <span>· 오늘만 이 가격 · 재고 3개 남음</span>
+</div>
+
+<main>
+  <div class="grid" id="grid"></div>
+  <div class="panel" id="checkout" style="display:none">
+    <h2 id="coName"></h2>
+    <div class="row"><span>상품 금액</span><b id="coPrice"></b></div>
+    <div class="row"><span>배송비 <span class="muted">(결제 시 추가)</span></span><b>+3,000원</b></div>
+    <div class="row"><span><input type="checkbox" id="warranty" checked> 안심 추가보증 3개월</span><b>+4,900원</b></div>
+    <div class="row"><span>최종 결제 금액</span><b id="coTotal"></b></div>
+    <p class="muted" id="coDwell"></p>
+    <button class="btn" id="pay">결제하기</button>
+  </div>
+</main>
+
+<div id="ov"><div class="modal" id="modal"></div></div>
+
+<script>
+const API = location.origin;
+// 실제로 검색 가능한 상품명을 쓴다. 가상 상품명이면 web_search가 최저가를 찾을 수 없고,
+// 심사위원 앞에서 "대안을 찾지 못했습니다"만 반복하게 된다.
+const PRODUCTS = [
+  { name:"제주 삼다수 2L 6병", price:7900, category:"water", tag:"생필품", was:9900 },
+  { name:"스탠리 클래식 진공 텀블러 473ml", price:69000, category:"tumbler", tag:"오늘만 30%", was:99000 },
+  { name:"타이레놀 500mg 30정", price:8900, category:"medicine", tag:"의약품", was:0 },
+  { name:"모나미 153 볼펜 12자루", price:4800, category:"stationery", tag:"", was:0 },
+  { name:"LG 그램 16 16Z90S 노트북", price:2190000, category:"laptop", tag:"12개월 무이자", was:2490000 },
+  { name:"나이키 에어 줌 페가수스 41", price:139000, category:"shoes", tag:"재고 3개", was:169000 },
+];
+
+let current = null, caseId = null;
+
+// 페이지 텍스트: 다크패턴 탐지 입력. 확장 프로그램에서는 document.body.innerText가 들어온다.
+const pageText = () => document.body.innerText;
+
+// DOM에서 직접 관찰되는 신호. 텍스트로는 "정기배송 신청"이라는 글자가 있다는 것까지만
+// 알 수 있고, 체크박스가 실제로 켜져 있는지는 여기서만 확정된다.
+// 실제 쇼핑몰에서는 확장 프로그램의 content script가 같은 일을 한다.
+function domSignals() {
+  const preselected = [...document.querySelectorAll('input[type=checkbox], input[type=radio]')]
+    .filter(el => el.checked && !el.closest('#ov') && el.id !== 'bnpl' && el.id !== 'wantAlt')
+    .map(el => {
+      const label = el.closest('label') || document.querySelector(`label[for="${el.id}"]`);
+      return (label ? label.innerText : el.name || el.id || 'unnamed').replace(/\s+/g, ' ').trim();
+    });
+  const timers = [...document.querySelectorAll('#timer')].map(e => e.textContent.trim());
+  return { preselected_inputs: preselected, countdown_timers: timers };
+}
+
+// ── 카운트다운(그 자체가 다크패턴이다) ──────────────────────────────
+let left = 299;
+setInterval(() => {
+  left = left > 0 ? left - 1 : 299;
+  const m = String(Math.floor(left/60)).padStart(2,'0'), s = String(left%60).padStart(2,'0');
+  document.getElementById('timer').textContent = `⏳ 특가 마감까지 00:${m}:${s}`;
+}, 1000);
+
+const won = (n) => (n||0).toLocaleString('ko-KR') + '원';
+
+function renderGrid() {
+  document.getElementById('grid').innerHTML = PRODUCTS.map((p,i) => `
+    <div class="card" onclick="select(${i})">
+      ${p.tag ? `<span class="tag">${p.tag}</span>` : ''}
+      <h3>${p.name}</h3>
+      ${p.was ? `<div class="strike">${won(p.was)}</div>` : ''}
+      <div class="price">${won(p.price)}</div>
+    </div>`).join('');
+}
+
+async function select(i) {
+  current = PRODUCTS[i];
+  caseId = null;
+  document.getElementById('checkout').style.display = '';
+  document.getElementById('coName').textContent = current.name;
+  document.getElementById('coPrice').textContent = won(current.price);
+  document.getElementById('coTotal').textContent = won(current.price + 3000 + (document.getElementById('warranty').checked ? 4900 : 0));
+  document.getElementById('coDwell').textContent = '이 상품 페이지를 관찰하기 시작했습니다. (개입 없음)';
+  document.getElementById('checkout').scrollIntoView({behavior:'smooth'});
+  // 관찰 단계 — 개입하지 않고 detected_at만 남긴다
+  await post('/api/observe', { profile_id: profileId(), product: prod() });
+}
+
+const profileId = () => document.getElementById('profile').value;
+const prod = () => ({
+  name: current.name, price: current.price, category: current.category,
+  url: location.href, discount_text: current.tag || ''
+});
+
+async function post(path, body) {
+  const r = await fetch(API + path, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body || {})
+  });
+  return r.json();
+}
+
+// ── 결제 버튼 = 트리거 ────────────────────────────────────────────
+document.getElementById('pay').onclick = async () => {
+  caseId = null;
+  startLive('결제를 잠시 멈췄습니다');
+  let res;
+  try {
+    res = await post('/api/case', {
+      profile_id: profileId(), product: prod(), page_text: pageText(),
+      dom_signals: domSignals(),
+      dwell_minutes: Number(document.getElementById('dwell').value),
+      payment_method_bnpl: document.getElementById('bnpl').checked,
+    });
+  } catch (e) { stopLive(); return openModal(errBox('백엔드에 연결하지 못했습니다.', e)); }
+  stopLive();
+
+  caseId = res.case_id;
+  if (res.parse_failed && !res.intervene) return renderPass(res);
+  if (res.mode === 'price_only') return renderPriceOnly(res);
+  renderQuestion(res);
+};
+
+// price_only — 심문하지 않는다. 사용자 입력 0회로 이미 조사가 끝나 있다.
+function renderPriceOnly(res) {
+  const pc = res.price_check;
+  let body;
+  if (!pc) {
+    body = `<p>가격을 확인하지 못했습니다.</p>${res.agent_error ? `<p class="muted"><code class="small">${res.agent_error}</code></p>` : ''}`;
+  } else if (pc.cheaper_found) {
+    body = `<div class="verdict v-WARN">더 싼 곳이 있습니다 · ${won(pc.best_price)}${pc.saving ? ` (${won(pc.saving)} 절약)` : ''}</div>
+      <p>${pc.note}</p>
+      ${pc.seller ? `<p class="muted">판매처: ${pc.seller}${pc.source_url ? ` · <a href="${pc.source_url}" target="_blank">근거</a>` : ''}</p>` : ''}`;
+  } else {
+    body = `<div class="verdict v-PASS">더 싼 곳을 확인하지 못했습니다</div>
+      <p>${pc.note}</p>
+      <p class="muted">확인하지 못한 것이지, 최저가라고 단정하는 것이 아닙니다.</p>`;
+  }
+  const structural = pc && pc.structural_alternative
+    ? `<p class="muted">구조적 대안</p><p>${pc.structural_alternative}</p>` : '';
+  openModal(`
+    <div class="kicker">ULYSSES · 심문 없음 · 마찰 없음</div>
+    <h2>${res.classification && res.classification.is_medical ? '가격만 확인했습니다' : '구매를 막지 않습니다'}</h2>
+    <p class="muted">${res.mode_reason}</p>
+    ${body}
+    ${structural}
+    <p class="muted">사용자 입력 0회. 팝업이 뜨는 동안 에이전트가 스스로 조사했습니다.</p>
+    <div class="actions"><button class="primary" onclick="resolveCase('accept')">구매 계속</button></div>`);
+}
+
+function openModal(html) { document.getElementById('modal').innerHTML = html; document.getElementById('ov').classList.add('on'); }
+function closeModal() { document.getElementById('ov').classList.remove('on'); }
+const errBox = (m,e) => `<div class="kicker">ULYSSES</div><h2>${m}</h2><p class="muted">${e}</p>
+  <div class="actions"><button class="primary" onclick="closeModal()">닫기</button></div>`;
+
+function renderPass(res) {
+  const failed = res.parse_failed;
+  openModal(`
+    <div class="kicker">ULYSSES · ${failed ? '상품 정보 추출 실패' : 'GATE ' + res.gate}</div>
+    <h2>${failed ? '판단할 근거가 없습니다.' : '확인했습니다. 구매하세요.'}</h2>
+    <p>${res.message}</p>
+    <p class="muted">${failed ? '확인하지 못한 것을 추측하지 않습니다.' : 'LLM을 호출하지 않았습니다. 이 구매는 이례적이지 않습니다.'}</p>
+    <div class="actions"><button class="primary" onclick="closeModal()">구매 계속</button></div>`);
+}
+
+function numsBox(b) {
+  const neg = (v) => v < 0 ? 'neg' : '';
+  return `<div class="nums">
+    <div class="num"><b class="${neg(b.after_purchase)}">${won(b.after_purchase)}</b><span>구매 후 자유 금액</span></div>
+    <div class="num"><b>D-${b.days_until_payday}</b><span>급여일까지</span></div>
+    <div class="num"><b class="${neg(b.after_upcoming)}">${won(b.upcoming_total)}</b><span>예정 지출 ${b.upcoming_events.length}건</span></div>
+  </div>`;
+}
+
+// 3단계 — 질문. 객관식이냐 주관식이냐는 에이전트가 정해서 내려보낸다.
+function renderQuestion(res) {
+  // 다크패턴 탐지 결과(res.dark_patterns)는 팝업에 표시하지 않는다.
+  // 탐지와 점수 반영(+1)은 그대로 유지된다.
+  const q = res.question || {};
+  const ov = res.override_stats || {};
+  const opts = (q.options || []).map(o => `
+    <label class="opt"><input type="checkbox" name="qopt" value="${o.id}">
+      <span>${o.label}</span><em>${o.implies}</em></label>`).join('');
+  const freeText = (q.format === 'text' || q.allow_free_text)
+    ? `<textarea id="reason" placeholder="${q.free_text_placeholder || '직접 입력'}"></textarea>` : '';
+
+  openModal(`
+    <div class="kicker">ULYSSES · 결제 직전 개입</div>
+    <h2>${q.text || '왜 지금 사야 합니까?'}</h2>
+    ${numsBox(res.budget)}
+    ${ov.overrides_last_30d ? `<p class="muted">최근 30일간 보류 판정을 ${ov.overrides_last_30d}회 무시했고 총 ${won(ov.override_amount)}입니다.</p>` : ''}
+    ${opts ? `<div class="opts">${opts}</div>` : ''}
+    ${freeText}
+    <label class="yn"><input type="checkbox" id="wantAlt" checked>
+      <span>${res.alternatives_prompt || '다른 가격이나 대안 상품을 찾아드릴까요?'}</span></label>
+    <p class="muted">질문 형식(${q.format === 'choice' ? '객관식' : '주관식'})은 에이전트가 정했습니다 — ${q.reason || ''}</p>
+    <div class="actions">
+      <button class="primary" onclick="sendAnswer()">조사 시작</button>
+      <button onclick="closeModal()">결제 취소</button>
+    </div>`);
+}
+
+// 조사는 20~40초가 걸린다. 그 시간을 침묵으로 두지 않고, 에이전트가 어떤 도구를
+// 어떤 순서로 고르는지 그대로 보여준다. 기다림이 곧 데모가 된다.
+let liveES = null;
+function startLive(title) {
+  openModal(`<div class="kicker">ULYSSES · 자율 조사 진행 중</div><h2>${title}</h2>
+    <p class="muted">에이전트가 필요한 도구를 스스로 고르고 있습니다. 사용자 입력은 더 이상 받지 않습니다.</p>
+    <ul class="bd" id="live"></ul>
+    <p class="muted"><a href="/viewer" target="_blank">RAW 스트림 뷰어</a>에서 원본 이벤트를 확인하세요.</p>`);
+  if (liveES) liveES.close();
+  liveES = new EventSource('/api/stream');
+  liveES.onmessage = (m) => {
+    let e; try { e = JSON.parse(m.data); } catch { return; }
+    // caseId는 /api/case 응답이 와야 알 수 있다. price_only는 그 응답 안에서 조사가
+    // 끝나므로, 아직 모를 때는 필터하지 않는다(데모에서 동시 조사는 없다).
+    if (caseId && e.case_id !== caseId) return;
+    const ul = document.getElementById('live');
+    if (!ul) return;
+    let line = null;
+    if (e.channel === 'tool_call') {
+      const r = e.raw || {};
+      const name = r.name || (r.type === 'web_search_call' ? 'web_search' : r.type);
+      let arg = '';
+      try { arg = r.arguments ? Object.values(JSON.parse(r.arguments)).join(', ') : ''; } catch { arg = ''; }
+      line = `<b>${name}</b>${arg ? ` <span class="muted">${arg}</span>` : ''}`;
+    } else if (e.channel === 'tool_result') {
+      const prev = ul.lastElementChild;
+      if (prev && !prev.dataset.done) { prev.dataset.done = '1'; prev.innerHTML += ' <span class="muted">✓</span>'; }
+      return;
+    } else if (e.channel === 'system' && e.raw && e.raw.step === 'verdict') {
+      line = `<b>규칙 엔진 판정</b> <span class="muted">${e.raw.verdict}</span>`;
+    }
+    if (line) { const li = document.createElement('li'); li.innerHTML = line; ul.appendChild(li); }
+  };
+}
+function stopLive() { if (liveES) { liveES.close(); liveES = null; } }
+
+async function sendAnswer() {
+  const selected = [...document.querySelectorAll('input[name=qopt]:checked')].map(e => e.value);
+  const el = document.getElementById('reason');
+  const wantAlt = document.getElementById('wantAlt');
+  if (!selected.length && !(el && el.value.trim())) {
+    const w = document.querySelector('.opts') || el;
+    if (w) { w.style.outline = '2px solid #e8380d'; setTimeout(() => w.style.outline = '', 900); }
+    return;
+  }
+  startLive('플래닝 모드 — 메모리와 웹을 조사 중…');
+  let res;
+  try {
+    res = await post(`/api/case/${caseId}/answer`, {
+      selected_option_ids: selected,
+      reason: el ? el.value : '',
+      want_alternatives: wantAlt ? wantAlt.checked : true,
+    });
+  } catch (e) { stopLive(); return openModal(errBox('조사에 실패했습니다.', e)); }
+  stopLive();
+  renderVerdict(res);
+}
+
+// 5단계 — 안 샀을 때 / 더 싸게 샀을 때 아낄 수 있는 돈. 계산은 서버가 한다.
+function savingsBox(s) {
+  if (!s) return '';
+  const offers = (s.offers || []).map(o => `
+    <li><b>${won(o.price)}</b> · ${o.seller}
+      ${o.url ? ` <a href="${o.url}" target="_blank">근거</a>` : ''}
+      ${o.note ? ` <span class="muted">${o.note}</span>` : ''}</li>`).join('');
+  return `
+    <p class="muted">아낄 수 있는 돈</p>
+    <div class="nums">
+      <div class="num"><b>${won(s.not_buying_saves)}</b><span>안 사면</span></div>
+      <div class="num"><b>${s.cheaper_saves ? won(s.cheaper_saves) : '—'}</b><span>더 싼 곳에서 사면</span></div>
+      <div class="num"><b>${s.annual_saving ? won(s.annual_saving) : '—'}</b><span>대안으로 바꾸면 연간</span></div>
+    </div>
+    ${s.work_hours_saved != null ? `<p class="muted">이 금액은 당신의 노동 ${s.work_hours_saved}시간입니다.</p>` : ''}
+    ${offers ? `<p class="muted">확인된 판매처 (가격순)</p><ul class="bd">${offers}</ul>`
+             : `<p class="muted">더 싼 판매처는 확인하지 못했습니다. 최저가라고 단정하지 않습니다.</p>`}`;
+}
+
+function renderVerdict(res) {
+  // 판정 근거는 항목 이름만. 점수는 표기하지 않고, 다크패턴 항목은 화면에서 제외한다.
+  const bd = (res.breakdown||[])
+    .filter(b => b.key !== 'dark_pattern_detected')
+    .map(b => `<li>${b.label}</li>`).join('');
+  const claims = (res.claims||[]).map(c => `<li>[${c.type}] ${c.text} → <b>${c.status}</b>${c.evidence ? ` <span class="muted">${c.evidence}</span>` : ''}</li>`).join('');
+  const holdTxt = res.hold_minutes ? `${res.hold_minutes >= 60 ? (res.hold_minutes/60)+'시간' : res.hold_minutes+'분'} 보류` : '';
+  openModal(`
+    <div class="kicker">ULYSSES · 규칙 엔진 판정</div>
+    <div class="verdict v-${res.verdict}">${res.verdict}${holdTxt ? ' · ' + holdTxt : ''}</div>
+    <p>${res.summary || ''}</p>
+    ${res.capped_reason ? `<p class="muted">${res.capped_reason}</p>` : ''}
+    ${claims ? `<p class="muted">주장 분해</p><ul class="bd">${claims}</ul>` : ''}
+    <p class="muted">판정 근거 (LLM이 아니라 규칙으로 계산)</p>
+    <ul class="bd">${bd || '<li>해당 항목 없음</li>'}</ul>
+    ${savingsBox(res.savings)}
+    ${res.alternative && res.alternative.summary ? `<p class="muted">대안</p><p>${res.alternative.summary}</p>` : ''}
+    ${res.follow_up_question ? `<p class="muted">에이전트의 되물음</p><p><b>${res.follow_up_question}</b></p>` : ''}
+    ${res.agent_memories && res.agent_memories.length ? `<p class="muted">에이전트가 스스로 기록한 관찰</p><ul class="bd">${res.agent_memories.map(m=>`<li>${m.text} <span class="muted">(${m.confidence})</span></li>`).join('')}</ul>` : ''}
+    ${res.release_at ? `<p class="muted">재검토 예약: <code class="small">${res.release_at}</code> — 이 시각이 되면 <b>사용자 입력 없이</b> 에이전트가 스스로 깨어납니다.</p>` : ''}
+    ${res.agent_error ? `<p class="muted">에이전트 오류: <code class="small">${res.agent_error}</code></p>` : ''}
+    <div class="actions">
+      <button class="primary" onclick="resolveCase('accept')">${res.verdict === 'PASS' ? '구매 계속' : '판정 수용'}</button>
+      <button onclick="askOverride()">그래도 지금 구매</button>
+    </div>`);
+}
+
+function askOverride() {
+  openModal(`<div class="kicker">ULYSSES</div><h2>구매를 막지 않습니다.</h2>
+    <p>최종 결정은 항상 당신에게 있습니다. 다만 한 문장만 남겨주세요. 이 문장은 다음 개입에서 그대로 인용됩니다.</p>
+    <textarea id="ovr" placeholder="지금 사는 이유"></textarea>
+    <div class="actions">
+      <button class="primary" onclick="resolveCase('override')">기록하고 구매</button>
+      <button onclick="closeModal()">취소</button>
+    </div>`);
+}
+
+async function resolveCase(action) {
+  const el = document.getElementById('ovr');
+  await post(`/api/case/${caseId}/resolve`, { action, reason: el ? el.value : '' });
+  closeModal();
+}
+
+// ── 데모 스위치 ────────────────────────────────────────────────────
+document.getElementById('wake').onclick = async () => {
+  openModal(`<div class="kicker">ULYSSES · 자율 재실행</div><h2>에이전트가 스스로 깨어났습니다</h2>
+    <p class="spinner">사용자 입력 0회. 예약된 재검토 시각이 도달한 것으로 처리했습니다.<br>
+    <a href="/viewer" target="_blank">RAW 스트림 뷰어</a>에서 확인하세요.</p>`);
+  const r = await post('/api/dev/wake', {});
+  const items = (r.results||[]).map(x => `<li><code class="small">${x.case_id}</code> → <b>${x.outcome.decision}</b><br>${x.outcome.message}<br><span class="muted">가격 확인: ${x.outcome.price_note}</span></li>`).join('');
+  openModal(`<div class="kicker">ULYSSES · 자율 재실행 결과</div>
+    <h2>${r.triggered}건 재검토 완료</h2>
+    <p class="muted">아무도 아무것도 누르지 않았습니다.</p>
+    <ul class="bd">${items || '<li>재검토 대상 사건이 없습니다. 먼저 HOLD 판정을 하나 만드세요.</li>'}</ul>
+    <div class="actions"><button class="primary" onclick="closeModal()">닫기</button></div>`);
+};
+
+document.getElementById('reset').onclick = async () => { await post('/api/dev/reset', {}); location.reload(); };
+document.getElementById('warranty').onchange = () => { if (current) select(PRODUCTS.indexOf(current)); };
+
+(async () => {
+  renderGrid();
+  const p = await (await fetch(API + '/api/profiles')).json();
+  document.getElementById('profile').innerHTML = p.profiles.map(x => `<option value="${x.profile_id}">${x.label}</option>`).join('');
+  document.getElementById('profile').value = p.default;
+})();
+</script>
+</body>
+</html>
