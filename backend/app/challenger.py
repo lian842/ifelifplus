@@ -75,16 +75,24 @@ SYSTEM_PROMPT = """\
    ★ offers는 **최대 2개**다. 가장 쓸모 있는 것만 남겨라.
    목록을 길게 만드는 것은 도움이 아니라 소음이다. 확실한 1개가 애매한 3개보다 낫다.
 
-   각 offer가 만족해야 하는 조건 — 하나라도 못 채우면 그 offer는 **빼라**:
-   - 실제 판매처 이름 (쿠팡, 11번가, 무신사 …). 다나와·에누리는 판매처가 아니라 비교 사이트다.
-   - 그 판매처에서 **바로 구매 가능한 상품 페이지 URL**.
-     다나와 가격비교 페이지에서 "쿠팡 4,200원"을 봤다면, 링크는 그 쿠팡 상품 페이지여야 한다.
-     비교 페이지 URL밖에 없으면 그 offer는 담지 마라.
-   - 대상 상품과 규격(용량·수량·모델)이 같거나, 다르다면 **무엇이 다른지 확정적으로** 안다.
+   offer를 담기 위한 **단 하나의 필수 조건**은 이것뿐이다:
+   그 판매처에서 **바로 구매 가능한 상품 페이지 URL**을 확보했을 것.
+   다나와 가격비교 페이지에서 "쿠팡 4,200원"을 봤다면 링크는 그 쿠팡 상품 페이지여야 한다.
+   비교 페이지 URL밖에 없으면 그 offer는 담지 마라. seller에도 다나와·에누리를 적지 마라.
 
-   note는 확인된 사실만 한 구절로 적는다. 예: "배송비 3,000원 별도", "품절", "500ml 20개입".
-   "규격이 확인되지 않아 동일 여부 미확인" 같은 문장은 **절대 쓰지 마라.**
-   확인하지 못했으면 그 offer를 빼는 것이 정직이지, 불확실성을 사용자에게 떠넘기는 것이 아니다.
+   ★ 규격이 다르다는 이유로 빼지 마라. 그건 사용자가 판단할 몫이다.
+   - 규격이 같으면 spec_match='same'
+   - 다르면 spec_match='different' + spec_label에 규격을 적는다 (예: '500ml 40개')
+   화면에는 "[상이한 규격] 500ml 40개"처럼 표시되므로 사용자가 오해하지 않는다.
+
+   ★★ 찾은 대안을 summary나 alternative_summary에 **문장으로 쓰지 마라.**
+   "쿠팡에서 500ml 40개 9,900원 대안을 확인했지만…" 같은 서술은 금지다.
+   대안이 들어갈 자리는 offers 배열 하나뿐이다. 산문으로 흘리면 화면에 표시되지 않는다.
+
+   cheaper_price는 **spec_match='same'인 offer만** 기준으로 계산한다.
+   규격이 다른 것을 절약액으로 계산하면 거짓말이 된다.
+
+   note는 배송비·품절 같은 확인된 사실만 한 구절로. 규격은 spec_label에 적으므로 중복 금지.
 
 4. 확인하지 못한 것을 추측하지 마라.
    검증 실패 시 반드시 이렇게 말한다:
@@ -204,8 +212,17 @@ class PriceOffer(BaseModel):
                     "다나와·에누리의 가격비교 페이지 URL을 넣지 마라. "
                     "구매 페이지 URL을 확보하지 못했으면 이 offer 자체를 빼라"
     )
+    spec_match: Literal["same", "different"] = Field(
+        description="주문 상품과 규격(용량·수량·모델)이 같으면 'same', 다르면 'different'. "
+                    "다르다고 해서 빼지 마라 — 'different'로 표시해서 담는다"
+    )
+    spec_label: str = Field(
+        description="이 상품의 규격을 짧게. 예: '500ml 40개', '2L 6병', '473ml'. "
+                    "spec_match가 'different'일 때 화면에 그대로 노출된다"
+    )
     note: str = Field(
-        description="배송비·품절·용량 차이처럼 **확인된 사실만** 한 구절로. 없으면 빈 문자열. "
+        description="배송비·품절처럼 **확인된 사실만** 한 구절로. 없으면 빈 문자열. "
+                    "규격은 spec_label에 적으므로 여기 중복해서 쓰지 마라. "
                     "'확인되지 않아 미확인' 같은 불확실성 서술은 절대 쓰지 마라"
     )
 
@@ -508,8 +525,9 @@ PRICE_ONLY_PROMPT = """\
    찾은 판매처는 offers에 가격 오름차순으로 **최대 2개**만 담는다.
    각 offer는 실제 판매처 이름 + **바로 구매 가능한 상품 페이지 URL**을 가져야 한다.
    다나와에서 "쿠팡 4,200원"을 봤다면 링크는 그 쿠팡 상품 페이지여야 한다.
-   비교 페이지 URL밖에 없거나 규격을 확정하지 못했으면 그 offer를 빼라.
-   note에 "규격 미확인" 같은 불확실성 서술을 쓰지 마라 — 뺄지 담을지만 정한다.
+   비교 페이지 URL밖에 없으면 그 offer를 빼라.
+   규격이 다르면 빼지 말고 spec_match='different' + spec_label에 규격을 적어 담는다.
+   찾은 대안을 note에 문장으로 쓰지 마라. offers 배열이 대안이 들어갈 유일한 자리다.
 1. get_purchase_history로 반복 구매 소모품인지 먼저 확인한다.
    - 반복 구매라면 find_alternatives(mode='longterm_substitute')로 손익분기 계산 근거를 받고,
      web_search로 실제 대체재 가격을 찾아 손익분기 개월수를 직접 계산한다.
@@ -618,7 +636,14 @@ def _trim_offers(payload: dict[str, Any]) -> dict[str, Any]:
         kept.append(o)
 
     kept.sort(key=lambda o: int(o.get("price") or 0) or 10**12)
-    payload["offers"] = kept[:MAX_OFFERS]
+    kept = kept[:MAX_OFFERS]
+    payload["offers"] = kept
+
+    # 절약액은 동일 규격일 때만 성립한다. 500ml 40개가 2L 6병보다 싸다는 것은 절약이 아니다.
+    if "cheaper_price" in payload:
+        same = [int(o.get("price") or 0) for o in kept
+                if o.get("spec_match") == "same" and int(o.get("price") or 0) > 0]
+        payload["cheaper_price"] = min(same) if same else 0
     return payload
 
 

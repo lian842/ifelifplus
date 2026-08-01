@@ -790,6 +790,8 @@
             </div>
             <p>${escapeAttr(result.summary || "확인된 소비 조건을 다시 살펴보세요.")}</p>
             ${reasonItems ? `<details><summary>판단 근거 ${reasons.length}개</summary><ul>${reasonItems}</ul></details>` : ""}
+            
+            ${renderOffersBlock(result.savings, result.alternative)}
           </article>`;
       })
       .join("");
@@ -1124,6 +1126,61 @@
     unverifiable: "확인불가",
     unverified: "미확인",
   };
+
+  // 확인된 판매처를 링크와 함께 보여준다.
+  // 링크 없는 가격은 사용자가 확인할 방법이 없어 아무 소용이 없다.
+  // 못 찾았으면 못 찾았다고 말한다 — 현재 가격이 최저가라고 단정하지 않는다.
+  // 마크업은 styles.css에 이미 준비돼 있는 .agent24-offer-line / .agent24-offer-meta 를 쓴다.
+  //   offer-line : width 500px 플렉스 행 — span(판매처, 말줄임) + strong(가격)
+  //   offer-meta : 그 아래 작게 깔리는 부가 정보(배송비·규격 등)
+  //   kicker     : 섹션 라벨
+  // 새 클래스를 만들지 않는 것이 핵심이다. 디자인 체계를 두 벌로 만들면 둘 다 썩는다.
+  function renderOffersBlock(savings, alternative) {
+    const offers = savings?.offers || [];
+    const altText = alternative?.summary ? escapeAttr(alternative.summary) : "";
+
+    const won = (n) => `${(Number(n) || 0).toLocaleString()}원`;
+    const link = (o, text) =>
+      o.url
+        ? `<a href="${escapeAttr(o.url)}" target="_blank" rel="noreferrer">${text}</a>`
+        : text;
+
+    const same = offers
+      .filter((o) => o.spec_match !== "different")
+      .sort((a, b) => (a.price || 0) - (b.price || 0))[0];
+    const others = offers.filter((o) => o.spec_match === "different");
+
+    // 헤드라인 한 줄 — 같은 규격의 최저가. 이 한 줄만 테두리를 갖는다.
+    const head = same
+      ? `<span>같은 규격 최저가 · ${escapeAttr(same.seller || "판매처")}</span>
+         <strong>${link(same, won(same.price))}</strong>`
+      : `<span>같은 규격 최저가</span><strong>확인하지 못했습니다</strong>`;
+
+    // 규격이 다른 것은 아래 작은 줄에 '참고'로 모은다.
+    // 대괄호 경고 대신 한 번만 성격을 밝히는 편이 조용하고 오해도 없다.
+    const refs = others
+      .map(
+        (o) =>
+          `<span>${link(o, `${escapeAttr(o.seller || "판매처")} ${escapeAttr(o.spec_label || "")} ${won(o.price)}`)}</span>`,
+      )
+      .join("");
+    const notes = offers
+      .map((o) => (o.note ? `<span>${escapeAttr(o.note)}</span>` : ""))
+      .join("");
+
+    const meta = [
+      refs ? `<span>다른 규격 참고</span>${refs}` : "",
+      notes,
+      altText ? `<span>${altText}</span>` : "",
+    ]
+      .filter(Boolean)
+      .join("");
+
+    return `
+      <div class="agent24-offer-line">${head}</div>
+      ${meta ? `<div class="agent24-offer-meta">${meta}</div>` : ""}
+    `;
+  }
 
   function renderVerdictScreen(result) {
     const verdict = result.verdict || "PASS";

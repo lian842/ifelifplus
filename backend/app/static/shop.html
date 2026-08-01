@@ -335,8 +335,8 @@ async function sendAnswer() {
 function savingsBox(s) {
   if (!s) return '';
   const offers = (s.offers || []).map(o => `
-    <li><b>${won(o.price)}</b> · ${o.seller}
-      ${o.url ? ` <a href="${o.url}" target="_blank">바로가기</a>` : ''}
+    <li>${o.spec_match === 'different' ? '<b>[상이한 규격]</b> ' : ''}${o.seller}${o.spec_label ? ' ' + o.spec_label : ''}
+      <b>${won(o.price)}</b>${o.url ? ` <a href="${o.url}" target="_blank">바로가기</a>` : ''}
       ${o.note ? ` <span class="muted">${o.note}</span>` : ''}</li>`).join('');
   return `
     <p class="muted">아낄 수 있는 돈</p>
