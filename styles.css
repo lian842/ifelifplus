@@ -505,11 +505,11 @@ html.agent24-dialog-open { overflow: hidden !important; }
 #agent24-purchase-guard .agent24-offer-meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; margin-top: 12px; color: rgba(62, 83, 93, .48); font-size: 10px; }
 #agent24-purchase-guard .agent24-main-action { min-height: 52px; display: inline-flex; align-items: center; gap: 28px; margin-top: 26px; padding: 13px 21px; color: white; border: 0; border-radius: 17px; background: #a8b4d9; box-shadow: 0 10px 24px rgba(116, 128, 171, .16), inset 0 1px 0 rgba(255, 255, 255, .18); font-size: 13px; font-weight: 620; cursor: pointer; }
 #agent24-purchase-guard .agent24-batch-interview .agent24-main-action:not(:disabled) {
-  background: linear-gradient(135deg, #b4bee0 0%, #a8b4d9 42%, #879bd4 100%);
+  background: #a8b4d9;
   box-shadow: 0 13px 30px rgba(112, 128, 187, .25), inset 0 1px 0 rgba(255, 255, 255, .4);
 }
 #agent24-purchase-guard .agent24-batch-interview .agent24-main-action:not(:disabled):hover {
-  background: linear-gradient(135deg, #aeb9dd 0%, #9fadd8 42%, #7d92d0 100%);
+  background: #9eadd8;
   box-shadow: 0 15px 34px rgba(103, 120, 183, .31), inset 0 1px 0 rgba(255, 255, 255, .42);
 }
 #agent24-purchase-guard .agent24-batch-interview > .agent24-quiet-action {
