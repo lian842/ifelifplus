@@ -284,10 +284,10 @@ html.agent24-dialog-open { overflow: hidden !important; }
   border-radius: 17px;
   background: #fff;
   box-shadow:
-    0 -8px 22px rgba(168, 180, 217, .28),
-    -16px 2px 28px rgba(181, 215, 235, .22),
-    18px 4px 30px rgba(184, 168, 220, .2),
-    0 16px 34px rgba(168, 180, 217, .12),
+    0 -8px 22px rgba(168, 180, 217, .34),
+    -16px 2px 28px rgba(168, 180, 217, .2),
+    18px 4px 30px rgba(168, 180, 217, .22),
+    0 16px 34px rgba(168, 180, 217, .16),
     0 0 0 1px rgba(168, 180, 217, .34),
     inset 0 1px 0 #fff;
   backdrop-filter: none;
@@ -297,13 +297,14 @@ html.agent24-dialog-open { overflow: hidden !important; }
 #agent24-purchase-guard .agent24-prompt::before {
   position: absolute;
   z-index: -1;
-  inset: -82px -76px -92px;
+  inset: -76px -74px -82px;
   border-radius: 46%;
   background:
-    radial-gradient(ellipse 50% 52% at 45% 48%, rgba(168, 180, 217, .72) 0%, rgba(176, 187, 220, .38) 32%, rgba(168, 180, 217, .1) 56%, transparent 75%),
-    radial-gradient(ellipse 34% 48% at 9% 55%, rgba(174, 214, 236, .52) 0%, rgba(185, 204, 230, .2) 38%, transparent 68%),
-    radial-gradient(ellipse 36% 46% at 94% 43%, rgba(188, 169, 224, .48) 0%, rgba(179, 171, 216, .18) 40%, transparent 70%);
-  filter: blur(21px);
+    radial-gradient(ellipse 13% 38% at 22% 50%, rgba(162, 220, 239, .68) 0%, rgba(172, 211, 235, .32) 34%, transparent 66%),
+    radial-gradient(ellipse 12% 36% at 82% 48%, rgba(154, 215, 238, .62) 0%, rgba(170, 207, 234, .28) 35%, transparent 65%),
+    radial-gradient(ellipse 58% 56% at 49% 48%, rgba(168, 180, 217, .76) 0%, rgba(176, 180, 220, .46) 32%, rgba(168, 180, 217, .14) 52%, transparent 64%),
+    radial-gradient(ellipse 86% 70% at 50% 52%, rgba(180, 166, 220, .34) 0%, rgba(173, 165, 216, .12) 44%, transparent 62%);
+  filter: blur(19px);
   content: "";
   pointer-events: none;
 }
@@ -321,10 +322,10 @@ html.agent24-dialog-open { overflow: hidden !important; }
   background: #fff;
   border-color: rgba(184, 195, 230, 1);
   box-shadow:
-    0 -9px 24px rgba(168, 180, 217, .34),
-    -17px 2px 30px rgba(174, 214, 236, .27),
-    19px 4px 32px rgba(188, 169, 224, .25),
-    0 17px 36px rgba(168, 180, 217, .15),
+    0 -9px 24px rgba(168, 180, 217, .4),
+    -17px 2px 30px rgba(168, 180, 217, .24),
+    19px 4px 32px rgba(168, 180, 217, .26),
+    0 17px 36px rgba(168, 180, 217, .18),
     0 0 0 1px rgba(168, 180, 217, .5),
     inset 0 1px 0 #fff;
 }
