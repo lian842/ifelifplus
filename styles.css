@@ -346,7 +346,20 @@ html.agent24-dialog-open { overflow: hidden !important; }
   cursor: pointer;
   transition: transform 170ms ease, box-shadow 170ms ease;
 }
-#agent24-purchase-guard .agent24-prompt button:hover { transform: translateY(-1px); background: #d9dddf; box-shadow: 0 7px 16px rgba(84, 95, 101, .09), inset 0 1px 0 rgba(255, 255, 255, .76); }
+#agent24-purchase-guard .agent24-prompt button:not(:disabled) {
+  color: #fff;
+  background: linear-gradient(145deg, #b9c3e2 0%, #a8b4d9 48%, #929fc9 100%);
+  box-shadow:
+    0 7px 18px rgba(123, 137, 184, .22),
+    inset 0 1px 0 rgba(255, 255, 255, .48);
+}
+#agent24-purchase-guard .agent24-prompt button:not(:disabled):hover {
+  transform: translateY(-1px);
+  background: linear-gradient(145deg, #c0c9e6 0%, #aeb9dc 48%, #98a5cd 100%);
+  box-shadow:
+    0 9px 22px rgba(123, 137, 184, .27),
+    inset 0 1px 0 rgba(255, 255, 255, .54);
+}
 #agent24-purchase-guard .agent24-prompt button span { font-size: 22px; font-weight: 350; transform: translateY(-1px); }
 
 #agent24-purchase-guard .agent24-quiet-action {

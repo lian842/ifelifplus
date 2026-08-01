@@ -532,6 +532,11 @@
     reason.addEventListener("input", () => {
       start.disabled = reason.value.trim().length === 0;
     });
+    reason.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+      event.preventDefault();
+      if (!start.disabled) start.click();
+    });
     start.onclick = () => {
       initialReason = reason.value.trim();
       if (initialReason) beginCaseQueue(items);
@@ -946,6 +951,11 @@
     }
     checkboxes.forEach((cb) => cb.addEventListener("change", refreshEnabled));
     textarea?.addEventListener("input", refreshEnabled);
+    textarea?.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+      event.preventDefault();
+      if (!continueBtn.disabled) continueBtn.click();
+    });
     refreshEnabled();
 
     document.getElementById("agent24-question-cancel").onclick = () => closeDialog();
