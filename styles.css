@@ -61,6 +61,14 @@ html.agent24-dialog-open { overflow: hidden !important; }
   animation: agent24-open 720ms cubic-bezier(.18, .82, .2, 1) 420ms both;
   transition: min-height 520ms cubic-bezier(.2, .8, .2, 1), background 600ms ease;
 }
+#agent24-purchase-guard .agent24-dialog:has(.agent24-batch-interview) {
+  height: min(880px, calc(100vh - 48px));
+  min-height: min(620px, calc(100vh - 48px));
+}
+#agent24-purchase-guard .agent24-dialog:has(.agent24-batch-interview) .agent24-main {
+  height: 100%;
+  overflow: hidden;
+}
 
 #agent24-purchase-guard .agent24-atmosphere,
 #agent24-purchase-guard .agent24-atmosphere i { position: absolute; pointer-events: none; }
@@ -480,13 +488,26 @@ html.agent24-dialog-open { overflow: hidden !important; }
 
 #agent24-purchase-guard .agent24-batch-interview,
 #agent24-purchase-guard .agent24-batch-feedback { width: min(560px, 100%); margin: 0 auto; text-align: center; }
-#agent24-purchase-guard .agent24-batch-interview { position: relative; top: -14px; }
+#agent24-purchase-guard .agent24-batch-interview { height: 100%; position: relative; top: 0; display: flex; flex-direction: column; }
 #agent24-purchase-guard .agent24-batch-interview > h1,
 #agent24-purchase-guard .agent24-batch-feedback > h1 { color: #31434c; font-size: 30px; font-weight: 570; letter-spacing: -.04em; }
 #agent24-purchase-guard .agent24-batch-interview > h1 { margin: 24px 0 0; }
 #agent24-purchase-guard .agent24-batch-feedback > h1 { margin: 0; }
 #agent24-purchase-guard .agent24-batch-question-list,
 #agent24-purchase-guard .agent24-batch-feedback-list { display: grid; gap: 14px; margin-top: 24px; text-align: left; }
+#agent24-purchase-guard .agent24-batch-interview .agent24-batch-question-list {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0 8px 28px 0;
+  scrollbar-color: rgba(168, 180, 217, .48) transparent;
+  scrollbar-width: thin;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 22px), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 22px), transparent 100%);
+}
+#agent24-purchase-guard .agent24-batch-interview .agent24-batch-question-list::-webkit-scrollbar { width: 5px; }
+#agent24-purchase-guard .agent24-batch-interview .agent24-batch-question-list::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(168, 180, 217, .48); }
 #agent24-purchase-guard .agent24-batch-question,
 #agent24-purchase-guard .agent24-batch-feedback-card { padding: 18px; border: 1px solid rgba(91, 119, 132, .14); border-radius: 20px; background: rgba(255, 255, 255, .54); }
 #agent24-purchase-guard .agent24-batch-product { margin: 0 0 7px; color: rgba(62, 83, 93, .48); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -555,10 +576,12 @@ html.agent24-dialog-open { overflow: hidden !important; }
   transform: translateY(-1px);
 }
 #agent24-purchase-guard .agent24-batch-interview > .agent24-quiet-action {
+  flex: 0 0 auto;
   display: block;
   top: 0;
   margin: 15px auto 0;
 }
+#agent24-purchase-guard .agent24-batch-interview > .agent24-main-action { flex: 0 0 auto; margin-top: 18px; }
 #agent24-purchase-guard .agent24-main-action:disabled,
 #agent24-purchase-guard .agent24-prompt button:disabled { color: #9aa5ab; background-color: #e3e6e8; background-image: none; box-shadow: none; cursor: default; }
 #agent24-purchase-guard .agent24-main-action span { font-size: 18px; font-weight: 350; }
@@ -615,6 +638,7 @@ html.agent24-dialog-open { overflow: hidden !important; }
 @media (max-width: 680px) {
   #agent24-purchase-guard { padding: 10px; }
   #agent24-purchase-guard .agent24-dialog { width: calc(100vw - 20px); min-height: min(660px, 94vh); border-radius: 28px; }
+  #agent24-purchase-guard .agent24-dialog:has(.agent24-batch-interview) { height: calc(100vh - 20px); min-height: 0; }
   #agent24-purchase-guard .agent24-main { padding: 165px 24px 42px; }
   #agent24-purchase-guard .agent24-balance h1,
   #agent24-purchase-guard .agent24-result-wrap h1 { font-size: 42px; }
