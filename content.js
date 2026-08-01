@@ -520,21 +520,25 @@
             <div class="agent24-purchase-group" aria-hidden="true">${ticker}</div>
           </div>
         </div>
-        <div class="agent24-prompt">
-          <textarea id="agent24-initial-reason" rows="1" maxlength="220" aria-label="구매 이유" placeholder="왜 이 상품을 사고 싶나요?"></textarea>
-          <button type="button" id="agent24-start-case" aria-label="계속" disabled><span>→</span></button>
-        </div>
+        ${
+          items.length > 1
+            ? `<button type="button" class="agent24-main-action" id="agent24-start-case">전체 상품 확인하기 <span>→</span></button>`
+            : `<div class="agent24-prompt">
+                <textarea id="agent24-initial-reason" rows="1" maxlength="220" aria-label="구매 이유" placeholder="왜 이 상품을 사고 싶나요?"></textarea>
+                <button type="button" id="agent24-start-case" aria-label="계속" disabled><span>→</span></button>
+              </div>`
+        }
         <button type="button" class="agent24-quiet-action" id="agent24-context-continue">그냥 구매할게요</button>
       </div>`;
 
     const reason = document.getElementById("agent24-initial-reason");
     const start = document.getElementById("agent24-start-case");
-    reason.addEventListener("input", () => {
+    reason?.addEventListener("input", () => {
       start.disabled = reason.value.trim().length === 0;
     });
     start.onclick = () => {
-      initialReason = reason.value.trim();
-      if (initialReason) beginCaseQueue(items);
+      initialReason = reason?.value.trim() || "";
+      if (items.length > 1 || initialReason) beginCaseQueue(items);
     };
     document.getElementById("agent24-context-continue").onclick = () => proceedWithOriginal();
     focusFirst();
@@ -542,8 +546,245 @@
 
 
   async function beginCaseQueue(items) {
-    wizard = { caseId: null, items, currentIndex: 0, decisions: [] };
-    await startCurrentCase();
+    wizard = { caseId: null, items, cases: [], decisions: [] };
+    renderBatchThinkingScreen("상품별 질문을 준비하고 있어요");
+
+    const { page_text, dom_signals } = collectSignals();
+    try {
+      wizard.cases = await Promise.all(
+        items.map(async (item) => {
+          const result = await callBackend(
+            "/api/case",
+            {
+              profile_id: "B",
+              product: {
+                name: item.name,
+                price: Number(item.price) * Number(item.quantity || 1),
+                category: guessCategory(item.name),
+              },
+              page_text,
+              dom_signals,
+              payment_method_bnpl: false,
+            },
+            130000,
+          );
+          return { item, caseId: result.case_id, initial: result };
+        }),
+      );
+    } catch {
+      renderStaticFallback();
+      return;
+    }
+
+    const challenges = wizard.cases.filter(
+      (entry) => !entry.initial.parse_failed && entry.initial.mode !== "price_only",
+    );
+    if (challenges.length) {
+      renderBatchQuestionScreen(challenges);
+    } else {
+      await submitBatchAnswers();
+    }
+  }
+
+  function renderBatchThinkingScreen(line) {
+    dialogElements.dialog.dataset.mood = "thinking";
+    dialogElements.screen.innerHTML = `
+      <div class="agent24-analysis-wrap">
+        <p class="agent24-kicker">장바구니 전체 분석</p>
+        <h1 id="agent24-title">모든 상품을<br>함께 살펴보고 있어요</h1>
+        <p class="agent24-analysis-line">${escapeAttr(line)}</p>
+      </div>`;
+  }
+
+  function renderBatchQuestionScreen(challenges) {
+    const questionsHtml = challenges
+      .map((entry, index) => {
+        const q = entry.initial.question || {
+          format: "text",
+          text: "이 상품을 사는 이유는 무엇인가요?",
+          options: [],
+          allow_free_text: true,
+          free_text_placeholder: "짧게 알려주세요",
+        };
+        const optionsHtml =
+          q.format === "choice"
+            ? `<div class="agent24-options">${q.options
+                .map(
+                  (option) => `
+                    <label class="agent24-option">
+                      <input type="radio" name="agent24-option-${index}" value="${escapeAttr(option.id)}" />
+                      <span>${escapeAttr(option.label)}</span><i>→</i>
+                    </label>`,
+                )
+                .join("")}</div>`
+            : "";
+        const freeTextNeeded = q.format === "text" || q.allow_free_text;
+        return `
+          <section class="agent24-batch-question" data-agent24-case-id="${escapeAttr(entry.caseId)}">
+            <p class="agent24-batch-product">${escapeAttr(entry.item.name)}</p>
+            <h2>${escapeAttr(q.text)}</h2>
+            ${optionsHtml}
+            ${
+              freeTextNeeded
+                ? `<textarea data-agent24-batch-reason rows="1" maxlength="160" placeholder="${escapeAttr(q.free_text_placeholder || "짧게 알려주세요")}">${escapeAttr(initialReason)}</textarea>`
+                : ""
+            }
+          </section>`;
+      })
+      .join("");
+
+    dialogElements.dialog.dataset.mood = "calm";
+    dialogElements.screen.innerHTML = `
+      <div class="agent24-batch-interview">
+        <p class="agent24-kicker">한 번만 답해주세요</p>
+        <h1 id="agent24-title">상품별로 짧게 확인할게요</h1>
+        <div class="agent24-batch-question-list">${questionsHtml}</div>
+        <button type="button" class="agent24-main-action" id="agent24-batch-submit" disabled>한 번에 분석하기 <span>→</span></button>
+        <button type="button" class="agent24-quiet-action" id="agent24-batch-cancel">그냥 구매할게요</button>
+      </div>`;
+
+    const submit = document.getElementById("agent24-batch-submit");
+    const rows = Array.from(
+      dialogElements.screen.querySelectorAll("[data-agent24-case-id]"),
+    );
+    const refreshBatchSubmit = () => {
+      submit.disabled = rows.some((row) => {
+        const selected = row.querySelector('input[type="radio"]:checked');
+        const reason = row.querySelector("[data-agent24-batch-reason]");
+        return !selected && !reason?.value.trim();
+      });
+    };
+    rows.forEach((row) => {
+      row.querySelectorAll('input[type="radio"]').forEach((input) =>
+        input.addEventListener("change", refreshBatchSubmit),
+      );
+      row
+        .querySelector("[data-agent24-batch-reason]")
+        ?.addEventListener("input", refreshBatchSubmit);
+    });
+    refreshBatchSubmit();
+
+    document.getElementById("agent24-batch-cancel").onclick = () => proceedWithOriginal();
+    submit.onclick = () => submitBatchAnswers();
+    focusFirst();
+  }
+
+  async function submitBatchAnswers() {
+    const answerRows = new Map(
+      Array.from(dialogElements.screen.querySelectorAll("[data-agent24-case-id]")).map(
+        (row) => [row.dataset.agent24CaseId, row],
+      ),
+    );
+    renderBatchThinkingScreen("답변과 소비 기록을 한 번에 비교하고 있어요");
+
+    try {
+      await Promise.all(
+        wizard.cases.map(async (entry) => {
+          if (entry.initial.parse_failed || entry.initial.mode === "price_only") {
+            entry.final = entry.initial;
+            return;
+          }
+          const row = answerRows.get(entry.caseId);
+          const selectedOptionIds = row
+            ? Array.from(row.querySelectorAll('input[type="radio"]:checked')).map(
+                (input) => input.value,
+              )
+            : [];
+          const reason =
+            row?.querySelector("[data-agent24-batch-reason]")?.value.trim() ||
+            initialReason;
+          entry.final = await callBackend(
+            `/api/case/${entry.caseId}/answer`,
+            { selected_option_ids: selectedOptionIds, reason, want_alternatives: true },
+            130000,
+          );
+        }),
+      );
+    } catch {
+      renderStaticFallback();
+      return;
+    }
+
+    const flagged = wizard.cases.filter(
+      (entry) => entry.final?.verdict && entry.final.verdict !== "PASS",
+    );
+    if (!flagged.length) {
+      await resolveBatchCases(false);
+      return;
+    }
+    renderBatchFeedbackScreen(flagged);
+  }
+
+  function renderBatchFeedbackScreen(flagged) {
+    const cardsHtml = flagged
+      .map((entry) => {
+        const result = entry.final;
+        const verdict = result.verdict || "WARN";
+        const reasons = (result.breakdown || [])
+          .filter((item) => item.key !== "dark_pattern_detected")
+          .map((item) => `<li>${escapeAttr(item.label)}</li>`)
+          .join("");
+        return `
+          <article class="agent24-batch-feedback-card">
+            <div>
+              <span class="agent24-verdict-badge agent24-verdict-${verdict}">${VERDICT_LABELS[verdict] || verdict}</span>
+              <strong>${escapeAttr(entry.item.name)}</strong>
+            </div>
+            <p>${escapeAttr(result.summary || "확인된 소비 조건을 다시 살펴보세요.")}</p>
+            ${reasons ? `<ul>${reasons}</ul>` : ""}
+          </article>`;
+      })
+      .join("");
+    const hasHold = flagged.some((entry) =>
+      ["HOLD", "STRONG_HOLD"].includes(entry.final.verdict),
+    );
+
+    dialogElements.dialog.dataset.mood = hasHold ? "tight" : "calm";
+    dialogElements.screen.innerHTML = `
+      <div class="agent24-batch-feedback">
+        <p class="agent24-kicker">전체 상품 분석 완료</p>
+        <h1 id="agent24-title">다시 볼 상품만 모았어요</h1>
+        <p class="agent24-hint">문제가 확인되지 않은 상품은 제외했습니다.</p>
+        <div class="agent24-batch-feedback-list">${cardsHtml}</div>
+        <div class="agent24-actions">
+          <button type="button" class="agent24-button agent24-button-primary" id="agent24-batch-accept">${hasHold ? "추천대로 멈추기" : "확인하고 결제하기"}</button>
+          <button type="button" class="agent24-button agent24-button-secondary" id="agent24-batch-override">그래도 모두 구매</button>
+        </div>
+      </div>`;
+
+    document.getElementById("agent24-batch-accept").onclick = () =>
+      resolveBatchCases(hasHold);
+    document.getElementById("agent24-batch-override").onclick = () =>
+      resolveBatchCases(false, true);
+    focusFirst();
+  }
+
+  async function resolveBatchCases(blockCheckout, overrideFlagged = false) {
+    const flagged = wizard.cases.filter(
+      (entry) => entry.final?.verdict && entry.final.verdict !== "PASS",
+    );
+    const holds = flagged.filter((entry) =>
+      ["HOLD", "STRONG_HOLD"].includes(entry.final.verdict),
+    );
+
+    if (blockCheckout) {
+      await Promise.all(holds.map((entry) => resolveCase("accept", "", entry.caseId)));
+      renderBlockedCartScreen(
+        holds.map((entry) => ({ name: entry.item.name, verdict: entry.final.verdict })),
+      );
+      return;
+    }
+
+    await Promise.all(
+      wizard.cases.map((entry) =>
+        resolveCase(
+          overrideFlagged && entry.final?.verdict !== "PASS" ? "override" : "accept",
+          "",
+          entry.caseId,
+        ),
+      ),
+    );
+    proceedWithOriginal();
   }
 
   async function startCurrentCase() {

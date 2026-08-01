@@ -400,6 +400,24 @@ html.agent24-dialog-open { overflow: hidden !important; }
 #agent24-purchase-guard .agent24-interview-prompt { top: 0; margin-top: 22px; }
 #agent24-purchase-guard .agent24-analysis-line { margin: 28px 0 0; color: rgba(68, 93, 104, .5); font-size: 12px; }
 
+#agent24-purchase-guard .agent24-batch-interview,
+#agent24-purchase-guard .agent24-batch-feedback { width: min(560px, 100%); margin: 0 auto; text-align: center; }
+#agent24-purchase-guard .agent24-batch-interview > h1,
+#agent24-purchase-guard .agent24-batch-feedback > h1 { margin: 0; color: #31434c; font-size: 30px; font-weight: 570; letter-spacing: -.04em; }
+#agent24-purchase-guard .agent24-batch-question-list,
+#agent24-purchase-guard .agent24-batch-feedback-list { display: grid; gap: 14px; margin-top: 24px; text-align: left; }
+#agent24-purchase-guard .agent24-batch-question,
+#agent24-purchase-guard .agent24-batch-feedback-card { padding: 18px; border: 1px solid rgba(91, 119, 132, .14); border-radius: 20px; background: rgba(255, 255, 255, .54); }
+#agent24-purchase-guard .agent24-batch-product { margin: 0 0 7px; color: rgba(62, 83, 93, .48); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#agent24-purchase-guard .agent24-batch-question h2 { margin: 0; color: #3e5964; font-size: 16px; font-weight: 600; }
+#agent24-purchase-guard .agent24-batch-question .agent24-options { width: 100%; margin-top: 10px; }
+#agent24-purchase-guard .agent24-batch-question .agent24-option { min-height: 42px; padding-top: 8px; padding-bottom: 8px; font-size: 12px; }
+#agent24-purchase-guard .agent24-batch-question textarea { width: 100%; margin-top: 12px; padding: 11px 13px; color: #31434c; border: 1px solid rgba(91, 119, 132, .18); border-radius: 12px; background: rgba(255, 255, 255, .72); font: inherit; font-size: 12px; resize: vertical; }
+#agent24-purchase-guard .agent24-batch-feedback-card > div { display: flex; align-items: center; gap: 10px; }
+#agent24-purchase-guard .agent24-batch-feedback-card strong { color: #31434c; font-size: 13px; overflow-wrap: anywhere; }
+#agent24-purchase-guard .agent24-batch-feedback-card p { margin: 10px 0 0; font-size: 12px; }
+#agent24-purchase-guard .agent24-batch-feedback-card ul { margin: 8px 0 0; padding-left: 18px; color: rgba(52, 71, 80, .65); font-size: 11px; line-height: 1.6; }
+
 #agent24-purchase-guard .agent24-analysis-wrap { padding-top: 10px; }
 #agent24-purchase-guard .agent24-tip-card {
   width: min(440px, 100%);
