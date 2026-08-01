@@ -233,6 +233,11 @@ class Findings(BaseModel):
         description="사용자에게 보여줄 사실 요약. 3문장 이내. 인격 언급 금지. "
                     "질문으로 끝내지 마라 — 답을 받을 입력칸이 없다. 사실 진술로 끝낸다"
     )
+    should_feedback: bool = Field(description="이 상품을 최종 피드백 화면에 노출할지 에이전트가 직접 결정")
+    feedback_level: Literal["PASS", "WARN", "HOLD", "STRONG_HOLD"] = Field(
+        description="에이전트의 최종 소비 판정. should_feedback=false이면 PASS"
+    )
+    feedback_reason: str = Field(description="판정의 결정적 근거. 사용자에게 보여줄 2문장 이내 피드백")
 
 
 class QuestionOption(BaseModel):
