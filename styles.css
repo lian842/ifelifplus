@@ -1,0 +1,153 @@
+#agent24-purchase-guard[hidden] {
+  display: none !important;
+}
+
+html.agent24-dialog-open {
+  overflow: hidden !important;
+}
+
+#agent24-purchase-guard,
+#agent24-purchase-guard * {
+  box-sizing: border-box;
+  letter-spacing: 0;
+}
+
+#agent24-purchase-guard {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR",
+    sans-serif;
+  color: #17212b;
+}
+
+#agent24-purchase-guard .agent24-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 22, 29, 0.68);
+  backdrop-filter: blur(2px);
+}
+
+#agent24-purchase-guard .agent24-dialog {
+  position: relative;
+  width: min(100%, 440px);
+  overflow: hidden;
+  border: 1px solid #d9e0e6;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+}
+
+#agent24-purchase-guard .agent24-accent {
+  width: 100%;
+  height: 6px;
+  background: #e34f3f;
+}
+
+#agent24-purchase-guard .agent24-content {
+  padding: 28px;
+}
+
+#agent24-purchase-guard .agent24-label {
+  margin: 0 0 10px;
+  color: #16775b;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+#agent24-purchase-guard h2 {
+  margin: 0;
+  color: #17212b;
+  font-size: 24px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+#agent24-purchase-guard #agent24-description {
+  margin: 14px 0 0;
+  color: #52606d;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+#agent24-purchase-guard .agent24-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 26px;
+}
+
+#agent24-purchase-guard .agent24-button {
+  min-width: 0;
+  min-height: 46px;
+  margin: 0;
+  padding: 11px 14px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+#agent24-purchase-guard .agent24-button:focus-visible {
+  outline: 3px solid rgba(22, 119, 91, 0.28);
+  outline-offset: 2px;
+}
+
+#agent24-purchase-guard .agent24-button-primary {
+  color: #ffffff;
+  background: #16775b;
+}
+
+#agent24-purchase-guard .agent24-button-primary:hover {
+  background: #0f624a;
+}
+
+#agent24-purchase-guard .agent24-button-secondary {
+  color: #34414d;
+  border-color: #c7d0d8;
+  background: #ffffff;
+}
+
+#agent24-purchase-guard .agent24-button-secondary:hover {
+  border-color: #8c99a5;
+  background: #f4f6f8;
+}
+
+@media (max-width: 480px) {
+  #agent24-purchase-guard {
+    padding: 14px;
+  }
+
+  #agent24-purchase-guard .agent24-content {
+    padding: 24px 20px 20px;
+  }
+
+  #agent24-purchase-guard h2 {
+    font-size: 21px;
+  }
+
+  #agent24-purchase-guard .agent24-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #agent24-purchase-guard .agent24-button {
+    transition: none;
+  }
+}

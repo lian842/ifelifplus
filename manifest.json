@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Agent24 Purchase Guard",
+  "version": "0.3.0",
+  "description": "지원 쇼핑몰과 배달 서비스에서 결제 전에 한 번 더 확인합니다.",
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.coupang.com/*",
+        "https://*.musinsa.com/*",
+        "https://*.29cm.co.kr/*",
+        "https://*.amazon.com/*",
+        "https://*.kream.co.kr/*",
+        "https://web.coupangeats.com/*",
+        "https://order.baemin.com/*",
+        "https://order-next.baemin.com/*",
+        "https://www.yogiyo.co.kr/*",
+        "https://yogiyo.co.kr/*"
+      ],
+      "js": ["sites.js", "content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_start"
+    }
+  ]
+}
