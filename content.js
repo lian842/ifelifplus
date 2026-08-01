@@ -790,9 +790,7 @@
 
     if (blockCheckout) {
       await Promise.all(holds.map((entry) => resolveCase("accept", "", entry.caseId)));
-      renderBlockedCartScreen(
-        holds.map((entry) => ({ name: entry.item.name, verdict: entry.final.verdict })),
-      );
+      closeDialog();
       return;
     }
 
@@ -1135,7 +1133,7 @@
       for (const decision of blocked) {
         await resolveCase(decision.action, "", decision.caseId);
       }
-      renderBlockedCartScreen(blocked);
+      closeDialog();
       return;
     }
 
@@ -1143,28 +1141,6 @@
       await resolveCase(decision.action, "", decision.caseId);
     }
     proceedWithOriginal();
-  }
-
-  function renderBlockedCartScreen(blocked) {
-    dialogElements.screen.innerHTML = `
-      <p class="agent24-label">AGENT24 · 전체 상품 판단 완료</p>
-      <h2 id="agent24-title">결제를 진행하지 않았습니다</h2>
-      <p>다음 상품의 보류 판정을 수용했어요.</p>
-      <div class="agent24-claims">
-        ${blocked
-          .map(
-            (decision) =>
-              `<p class="agent24-claim">· ${escapeAttr(decision.name)} — ${VERDICT_LABELS[decision.verdict] || decision.verdict}</p>`,
-          )
-          .join("")}
-      </div>
-      <p class="agent24-hint">장바구니에서 해당 상품을 제외한 뒤 다시 결제해 주세요.</p>
-      <div class="agent24-actions">
-        <button type="button" class="agent24-button agent24-button-primary" id="agent24-cart-close">확인</button>
-      </div>
-    `;
-    document.getElementById("agent24-cart-close").onclick = () => closeDialog();
-    focusFirst();
   }
 
   async function resolveCase(action, reason = "", caseId = wizard.caseId) {
